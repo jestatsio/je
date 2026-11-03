@@ -1,0 +1,12 @@
+{
+  "name": "jestudio",
+  "description": "Personal connection, status, and memory skills for J&E Studio.",
+  "owner": {"name": "J&E Stats"},
+  "plugins": [
+    {
+      "name": "je",
+      "source": "./plugins/je",
+      "description": "Connect familiar tools to J&E Studio and inspect personal connections."
+    }
+  ]
+}

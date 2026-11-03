@@ -1,0 +1,12 @@
+{
+  "name": "jestudio",
+  "interface": {"displayName": "J&E Studio"},
+  "plugins": [
+    {
+      "name": "je",
+      "source": {"source": "local", "path": "./plugins/je"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}

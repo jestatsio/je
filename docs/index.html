@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Connect your familiar AI tools to J&E Studio. Install je, set up native client plugins, and manage personal model and memory connections.">
+  <meta name="theme-color" content="#f8f9f5">
+  <title>je · Your tools. Your context. Your Studio.</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to documentation</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#overview" aria-label="je documentation home"><span class="brand-mark" aria-hidden="true">je</span><span>Studio <span class="brand-docs">/ Docs</span></span></a>
+      <div class="topbar-actions"><span class="version">v0.2.0</span><a class="source-link" href="https://github.com/jestatsio/je">Downloads &amp; plugins <span aria-hidden="true">↗</span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu <span aria-hidden="true">☰</span></button></div>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav aria-label="Documentation">
+        <p class="nav-label">Get started</p>
+        <a href="#overview" aria-current="location">Overview</a>
+        <a href="#install">Install je</a>
+        <a href="#setup">Set up your tools</a>
+        <a href="#connect">Save a connection</a>
+        <p class="nav-label">Make it yours</p>
+        <a href="#sessions">Client sessions</a>
+        <a href="#memory">Shared memory</a>
+        <a href="#ollama">Native Ollama</a>
+        <p class="nav-label">Reference</p>
+        <a href="#commands">Commands</a>
+        <a href="#privacy">Privacy &amp; local files</a>
+        <a href="#updates">Updates &amp; removal</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </nav>
+      <div class="sidebar-note"><span class="status-dot" aria-hidden="true"></span><strong>A personal connection</strong><p>The client is public.<br>Your Studio access comes from your operator.</p></div>
+      <a class="sidebar-footer" href="https://jestats.io">Made by J&amp;E Stats <span aria-hidden="true">↗</span></a>
+    </aside>
+    <main id="main" tabindex="-1">
+      <section class="hero section" id="overview" aria-labelledby="hero-title">
+        <p class="eyebrow"><span aria-hidden="true">⌘</span> The Studio command line</p>
+        <h1 id="hero-title">Your tools.<br>Your context.<br><span>Your Studio.</span></h1>
+        <p class="hero-lead">Keep the tools you know. Bring your model connections and personal memory with you.</p>
+        <div class="hero-install"><div class="terminal-heading"><span><span class="terminal-dot" aria-hidden="true"></span> Start in your terminal</span><span>macOS · Apple silicon</span></div><div class="code-block hero-code"><pre><code id="hero-install">brew install jestatsio/tap/je</code></pre><button class="copy-button" type="button" data-copy="hero-install" aria-label="Copy Homebrew install command">Copy</button></div><div class="hero-next"><span>Then connect your tools</span><code>je setup</code><a href="#setup" aria-label="Read the setup guide">Get started <span aria-hidden="true">→</span></a></div></div>
+        <div class="feature-strip"><div><span class="feature-symbol" aria-hidden="true">↗</span><strong>Familiar clients</strong><span>Codex, Claude Code, Ollama</span></div><div><span class="feature-symbol" aria-hidden="true">◈</span><strong>Personal context</strong><span>Memory you can inspect</span></div><div><span class="feature-symbol" aria-hidden="true">⌁</span><strong>Explicit connections</strong><span>You choose each session</span></div></div>
+        <p class="service-note"><strong>je is the client for J&amp;E Studio.</strong> It saves your connections and helps your existing tools use them. The Studio service is private and operator-managed. Installing the client does not create an account or grant service access.</p>
+      </section>
+
+      <section class="section" id="install" aria-labelledby="install-title">
+        <div class="section-heading"><span class="section-number">01</span><h2 id="install-title">Install once. Start where you are.</h2></div>
+        <p>Install with Homebrew on an Apple silicon Mac. The packaged client includes its runtime, so you do not need to install or manage Python.</p>
+        <div class="code-block"><pre><code id="install-code">brew install jestatsio/tap/je
+je --help</code></pre><button class="copy-button" type="button" data-copy="install-code" aria-label="Copy installation commands">Copy</button></div>
+        <div class="callout"><span class="callout-mark" aria-hidden="true">i</span><div><strong>Initial release</strong><p>Version 0.2.0 is built for macOS on Apple silicon and has been tested on macOS 27.2. Other macOS versions and platforms are not yet qualified. <a href="https://github.com/jestatsio/je/releases">Release downloads and notes <span aria-hidden="true">↗</span></a></p></div></div>
+        <p>Install the native Codex, Claude Code, or Ollama client separately. Before connecting to Studio, ask your operator for the service endpoint, a permitted model name, and your personal key.</p>
+      </section>
+
+      <section class="section" id="setup" aria-labelledby="setup-title">
+        <div class="section-heading"><span class="section-number">02</span><h2 id="setup-title">Make Studio available in your tools.</h2></div>
+        <p>Run setup to detect installed Codex and Claude Code CLIs. It asks before installing the Studio plugin through each client's native plugin manager.</p>
+        <div class="code-block"><pre><code id="setup-code">je setup</code></pre><button class="copy-button" type="button" data-copy="setup-code" aria-label="Copy setup command">Copy</button></div>
+        <div class="skill-cards"><article><span class="skill-name">connect</span><h3>Find your connection.</h3><p>Guidance for saving a profile and starting a Studio session.</p></article><article><span class="skill-name">status</span><h3>Check your setup.</h3><p>Inspect saved connections and check service access.</p></article><article><span class="skill-name">memory</span><h3>Bring useful context.</h3><p>Guidance for a separate, optional memory connection.</p></article></div>
+        <p>Setup installs guidance for the client. It does not install Codex or Claude Code, switch your model, attach an MCP server, or add hooks. Use the connection steps below when you want a Studio session.</p>
+        <details><summary>Choose a client or preview the changes</summary><div class="details-content"><div class="code-block"><pre><code id="setup-options">je setup --client claude
+je setup --client codex
+je setup --dry-run</code></pre><button class="copy-button" type="button" data-copy="setup-options" aria-label="Copy setup options">Copy</button></div><p>Use <code>--yes</code> to accept installation without the confirmation prompts. Use <code>--remove</code> to remove the Studio plugin while keeping its marketplace entry. The <a href="#commands">command reference</a> lists every setup option.</p></div></details>
+      </section>
+
+      <section class="section" id="connect" aria-labelledby="connect-title">
+        <div class="section-heading"><span class="section-number">03</span><h2 id="connect-title">Save your personal connection.</h2></div>
+        <p>A profile gives a service endpoint, model, and personal key a name you can use again. Replace the example address and <code>YOUR_MODEL_NAME</code> with the values from your operator.</p>
+        <div class="code-block"><pre><code id="profile-code">je profile add studio \
+  --endpoint https://models.example.test \
+  --model YOUR_MODEL_NAME
+
+je doctor --profile studio</code></pre><button class="copy-button" type="button" data-copy="profile-code" aria-label="Copy model connection example">Copy</button></div>
+        <p>The client asks for your key privately in the terminal. Keep the key out of command arguments. The default connection check verifies authentication and model availability without generating a response.</p>
+        <div class="callout"><span class="callout-mark" aria-hidden="true">↗</span><div><strong>One profile per tested route</strong><p>Claude Code and Codex use different model protocols. A working model listing does not establish compatibility with either client. Use the route and profile settings your operator has tested for your chosen tool.</p></div></div>
+        <p>List your profiles with <code>je profile list</code>, or inspect one with <code>je profile show studio</code>. Neither command displays its key. To update a profile, repeat <code>je profile add</code> with <code>--replace</code>.</p>
+      </section>
+
+      <section class="section" id="sessions" aria-labelledby="sessions-title">
+        <p class="eyebrow">Work in your own environment</p><h2 id="sessions-title">A Studio session, in a familiar client.</h2>
+        <p>Open a terminal in the project you want to work on. The launcher applies your saved connection to that session while keeping the client's own tools, instructions, and approval controls.</p>
+        <div class="tabs" data-tabs>
+          <div class="tab-list" role="tablist" aria-label="Choose your client"><button type="button" role="tab" id="claude-tab" aria-controls="claude-panel" aria-selected="true">Claude Code</button><button type="button" role="tab" id="codex-tab" aria-controls="codex-panel" aria-selected="false" tabindex="-1">Codex</button></div>
+          <div class="tab-panel" id="claude-panel" role="tabpanel" aria-labelledby="claude-tab" tabindex="0"><h3>Claude Code</h3><p>Use a profile with a Claude-compatible route enabled by your operator.</p><div class="code-block"><pre><code id="claude-code">je connect claude --profile studio</code></pre><button class="copy-button" type="button" data-copy="claude-code" aria-label="Copy Claude session command">Copy</button></div><p>je checks the connection and supplies temporary session settings. If an existing sign-in or provider conflicts with that route, the launch stops so you can resolve it.</p></div>
+          <div class="tab-panel" id="codex-panel" role="tabpanel" aria-labelledby="codex-tab" tabindex="0"><h3>Codex</h3><p>Use an operator-tested Responses route and a reviewed model catalog matched to the exact installed Codex version and configured context limit. Replace every uppercase placeholder below.</p><div class="code-block"><pre><code id="codex-profile">je profile add studio-codex \
+  --endpoint https://models.example.test \
+  --model YOUR_CODEX_MODEL \
+  --context-window CONTEXT_TOKENS \
+  --codex-catalog /absolute/path/to/reviewed-catalog.json \
+  --codex-version YOUR_CODEX_VERSION
+
+je connect codex --profile studio-codex</code></pre><button class="copy-button" type="button" data-copy="codex-profile" aria-label="Copy Codex profile and session example">Copy</button></div><p>At launch, je checks the executable version, catalog contents, selected model, and context against the saved binding. Changing the profile's context does not enlarge the server's limit. A generic model route is not a qualified Codex connection.</p></div>
+        </div>
+        <p>Pass additional supported client arguments after <code>--</code>. If a client cannot be found, use <code>--executable /absolute/path/to/client</code>. Organization-managed settings may restrict custom providers.</p>
+        <details><summary>Desktop apps, editors, and other clients</summary><div class="details-content"><p>Generate configuration fragments for review with <code>je export</code>. Exporting does not activate or replace an app's settings. Read the generated README and confirm compatibility with the app's installed version.</p><div class="code-block"><pre><code id="export-code">je export --profile studio</code></pre><button class="copy-button" type="button" data-copy="export-code" aria-label="Copy desktop export command">Copy</button></div><p>For another client that reads OpenAI environment variables, use <code>je run --profile studio -- COMMAND</code>. This passes the connection to the child process. It does not translate protocols or attach shared memory.</p></div></details>
+      </section>
+
+      <section class="section" id="memory" aria-labelledby="memory-title">
+        <p class="eyebrow">Context you control</p><h2 id="memory-title">Keep useful knowledge between sessions.</h2>
+        <p>Studio memory holds preferences and project facts across connected tools, separately for each person. Use the Studio memory page to inspect saved information, edit it, review earlier versions, or decide what to forget.</p>
+        <p>Memory is optional and uses a separate personal token. Save the complete MCP endpoint supplied by your operator, including its path.</p>
+        <div class="code-block"><pre><code id="memory-code">je memory add studio-memory \
+  --endpoint https://memory.example.test/mcp
+je memory check studio-memory
+
+je connect claude --profile studio \
+  --memory-profile studio-memory</code></pre><button class="copy-button" type="button" data-copy="memory-code" aria-label="Copy optional memory setup example">Copy</button></div>
+        <p>The check lists available tools without reading saved memories or requesting inference. Saving a connection does not attach it automatically. Select <code>--memory-profile</code> for each supported session.</p>
+        <div class="callout"><span class="callout-mark" aria-hidden="true">i</span><div><strong>Current memory support</strong><p>Codex attachment currently requires version <code>0.166.0-alpha.5.1</code> and its own tested model profile. Automatic saves remain unreliable in the pilot. Review what is saved rather than assuming every preference was remembered. Native Ollama and desktop exports do not attach memory through this client.</p></div></div>
+        <p>Deleted memories leave recall immediately and remain in trash for 30 days. Removing a local memory connection does not delete saved memories or revoke the service token.</p>
+      </section>
+
+      <section class="section" id="ollama" aria-labelledby="ollama-title">
+        <p class="eyebrow">Native command-line chat</p><h2 id="ollama-title">Use Ollama with its own connection.</h2>
+        <p>The native Ollama CLI uses a separate endpoint, model name, and personal key. Install Ollama separately and request these values from your operator. A model gateway profile is not a substitute.</p>
+        <div class="code-block"><pre><code id="ollama-code">je ollama profile add studio-native \
+  --endpoint https://native.example.test/ollama \
+  --model YOUR_NATIVE_MODEL
+
+je ollama --profile studio-native check
+je ollama --profile studio-native</code></pre><button class="copy-button" type="button" data-copy="ollama-code" aria-label="Copy native Ollama setup example">Copy</button></div>
+        <p>Use the complete native API root, including any <code>/ollama</code> prefix. Do not append <code>/api</code> or use the gateway's <code>/v1</code> endpoint. The check lists authorized models without starting inference.</p>
+        <p>During a session, a temporary loopback relay supplies the saved credential upstream and closes when the CLI exits. Global Ollama routing settings stay unchanged. The shared connection supports chat and model inspection. Model downloads and management remain the operator's responsibility.</p>
+        <p class="small-note">This integration covers the native CLI. It does not configure the Ollama desktop app or attach shared memory.</p>
+      </section>
+
+      <section class="section" id="commands" aria-labelledby="commands-title">
+        <p class="eyebrow">Keep this nearby</p><h2 id="commands-title">The command reference.</h2>
+        <p>Run <code>je --help</code> or add <code>--help</code> to a command for its complete options.</p>
+        <div class="table-wrap" role="region" aria-label="Setup options" tabindex="0"><table><caption>Setup options</caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
+          <tr><td><code>je setup</code></td><td>Detect installed clients and confirm each native Studio plugin installation.</td></tr>
+          <tr><td><code>je setup --client codex</code><br><code>je setup --client claude</code></td><td>Set up only the selected client.</td></tr>
+          <tr><td><code>je setup --dry-run</code></td><td>Preview the intended setup without applying it.</td></tr>
+          <tr><td><code>je setup --yes</code></td><td>Accept the setup prompts without interactive confirmation.</td></tr>
+          <tr><td><code>je setup --remove</code></td><td>Remove Studio's native plugin while keeping its marketplace entry.</td></tr>
+        </tbody></table></div>
+        <div class="table-wrap" role="region" aria-label="Connection commands" tabindex="0"><table><caption>Connections and sessions</caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
+          <tr><td><code>je profile add NAME</code></td><td>Save a model endpoint, permitted model, and personal key. Requires <code>--endpoint</code> and <code>--model</code>.</td></tr>
+          <tr><td><code>je profile list</code><br><code>je profile show NAME</code></td><td>Inspect saved profiles without displaying their keys.</td></tr>
+          <tr><td><code>je profile remove NAME</code></td><td>Remove the local profile. Server access is not revoked.</td></tr>
+          <tr><td><code>je doctor --profile NAME</code></td><td>Check authentication and model availability without inference.</td></tr>
+          <tr><td><code>je connect claude --profile NAME</code><br><code>je connect codex --profile NAME</code></td><td>Launch a client with the selected connection. Use a tested route for that client.</td></tr>
+          <tr><td><code>je memory add NAME --endpoint URL</code></td><td>Save a separate memory connection and privately enter its token.</td></tr>
+          <tr><td><code>je memory list</code><br><code>je memory show NAME</code><br><code>je memory check NAME</code><br><code>je memory remove NAME</code></td><td>Inspect, check, or remove a local memory connection. These commands do not delete service memories.</td></tr>
+          <tr><td><code>je ollama profile add NAME</code></td><td>Save a native Ollama connection with its own <code>--endpoint</code>, <code>--model</code>, and key. Native profiles also support <code>list</code>, <code>show</code>, and <code>remove</code>.</td></tr>
+          <tr><td><code>je ollama --profile NAME check</code><br><code>je ollama --profile NAME</code></td><td>Check native model discovery or start native CLI chat.</td></tr>
+          <tr><td><code>je export --profile NAME</code></td><td>Prepare desktop and editor settings for review.</td></tr>
+          <tr><td><code>je run --profile NAME -- COMMAND</code></td><td>Pass OpenAI connection variables to another client process.</td></tr>
+        </tbody></table></div>
+        <p class="small-note"><code>je doctor --profile NAME --probe</code> sends small model requests and can consume inference resources. Add <code>--harness claude</code> or <code>--harness codex</code> to select protocol checks. A passing probe does not qualify every native client feature.</p>
+      </section>
+
+      <section class="section" id="privacy" aria-labelledby="privacy-title">
+        <p class="eyebrow">Know what is saved</p><h2 id="privacy-title">Personal credentials. Explicit access.</h2>
+        <div class="privacy-grid"><article><h3>On your computer</h3><p>Keys and tokens are saved in owner-only local files. This is file storage, not macOS Keychain storage. Model, memory, and native Ollama profiles are separate.</p></article><article><h3>In your session</h3><p>You choose the profile and whether to attach memory. Native client instructions, hooks, history behavior, and approval controls still apply.</p></article><article><h3>At your Studio</h3><p>Your operator manages service access, logging, and retention. Confirm those policies before sending sensitive material. The public client does not provide a Studio account.</p></article></div>
+        <h3>Where profiles live</h3><p>The default directory remains <code>~/.config/je-gateway</code> for compatibility, or <code>je-gateway</code> under <code>XDG_CONFIG_HOME</code>. Existing profiles do not need to move.</p>
+        <div class="table-wrap" role="region" aria-label="State directory precedence" tabindex="0"><table><thead><tr><th scope="col">Setting</th><th scope="col">Precedence</th></tr></thead><tbody><tr><td><code>je --state-dir PATH …</code></td><td>An explicit command-level location takes precedence.</td></tr><tr><td><code>JE_STUDIO_HOME</code></td><td>The preferred environment override.</td></tr><tr><td><code>JE_GATEWAY_HOME</code></td><td>The legacy override, used when <code>JE_STUDIO_HOME</code> is unset.</td></tr></tbody></table></div>
+        <p>For noninteractive model setup, use <code>--key-file</code> with an owner-only regular file or <code>--key-env</code> naming an already-set environment variable. Memory setup uses <code>--token-file</code> or <code>--token-env</code>. Never put a credential's value directly in a command argument.</p>
+      </section>
+
+      <section class="section" id="updates" aria-labelledby="updates-title">
+        <p class="eyebrow">Keep your setup current</p><h2 id="updates-title">Updates and a clean way out.</h2>
+        <h3>Update the client</h3><div class="code-block"><pre><code id="update-code">brew update
+brew upgrade je</code></pre><button class="copy-button" type="button" data-copy="update-code" aria-label="Copy Homebrew update commands">Copy</button></div><p>Studio plugins update through each client's native plugin manager. Check the <a href="https://github.com/jestatsio/je/releases">release notes</a> before upgrading. A Codex version change may require a newly reviewed catalog and an updated profile binding.</p>
+        <h3>Remove the client</h3><div class="code-block"><pre><code id="remove-code">je setup --remove
+brew uninstall je</code></pre><button class="copy-button" type="button" data-copy="remove-code" aria-label="Copy plugin and client removal commands">Copy</button></div><p>Remove the plugins before uninstalling the command-line client. Your saved profiles and native marketplace entries remain. Removing a profile, plugin, or local installation does not revoke a server credential. Ask your operator to revoke access when needed.</p>
+      </section>
+
+      <section class="section" id="troubleshooting" aria-labelledby="troubleshooting-title">
+        <p class="eyebrow">When something needs attention</p><h2 id="troubleshooting-title">Start with the connection.</h2>
+        <div class="troubleshooting-list">
+          <details><summary>Setup cannot find Codex or Claude Code</summary><div class="details-content"><p>Install the native client separately and confirm its command works in your terminal. Run <code>je setup --dry-run</code> to inspect detection, then try setup for that client. Setup does not download the client for you.</p></div></details>
+          <details><summary>The key is rejected or the model is missing</summary><div class="details-content"><p>Run <code>je doctor --profile NAME</code> and confirm the endpoint and permitted model name with your operator. Inspect the saved values with <code>je profile show NAME</code>. Replace the profile explicitly if its key or connection has changed.</p></div></details>
+          <details><summary>Codex reports a version or catalog mismatch</summary><div class="details-content"><p>Match the installed Codex version, model, context limit, and reviewed catalog to the saved profile. Ask the operator to review changed catalog contents before replacing the binding. A successful model listing does not remove this requirement.</p></div></details>
+          <details><summary>Memory is saved but not available in the session</summary><div class="details-content"><p>Run <code>je memory check NAME</code>, then launch a supported client with <code>--memory-profile NAME</code>. Saving a connection or installing the plugin does not attach memory automatically. Verify the supported Codex version when using Codex.</p></div></details>
+          <details><summary>Ollama cannot find the expected model</summary><div class="details-content"><p>Check the separate native profile with <code>je ollama --profile NAME check</code>. Use the operator's native model name and full API root. Gateway aliases and gateway credentials do not automatically work with the native service.</p></div></details>
+          <details><summary>A desktop export has not changed the app</summary><div class="details-content"><p>That is expected. Exports create files for review, without activating them. Read the generated README and apply only the relevant settings through the app's supported configuration workflow.</p></div></details>
+        </div>
+        <p class="support-note">For a connection problem, contact your Studio operator. For a client issue, <a href="https://github.com/jestatsio/je/issues">open an issue</a> with the command, installed versions, and error text. Leave out credentials and private memory contents.</p>
+      </section>
+      <footer class="footer"><a class="footer-brand" href="#overview"><span class="brand-mark small" aria-hidden="true">je</span> J&amp;E Studio</a><p>Your tools. Your context. Your Studio.</p><a href="https://github.com/jestatsio/je/releases">Release notes <span aria-hidden="true">↗</span></a></footer>
+    </main>
+  </div>
+  <div class="sr-only" id="copy-status" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
