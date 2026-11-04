@@ -1,3 +1,5 @@
+import Foundation
+
 public struct CLIResult: Equatable, Sendable {
     public let code: Int32
     public let stdout: String
@@ -13,27 +15,52 @@ public struct CLIResult: Equatable, Sendable {
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
     private static let legacyCommands: Set<String> = [
-        "setup", "profile", "memory", "ollama", "connect", "run", "doctor", "export", "credential"
+        "setup", "memory", "ollama", "connect", "run", "doctor", "export", "credential"
     ]
 
-    public static func run(_ arguments: [String]) -> CLIResult {
-        guard let command = arguments.first else {
+    public static func run(
+        _ arguments: [String],
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> CLIResult {
+        var remaining = arguments
+        var explicitStateDirectory: String?
+        while let first = remaining.first {
+            if first == "--state-dir" {
+                guard remaining.count >= 2 else { return invalid() }
+                explicitStateDirectory = remaining[1]
+                remaining.removeFirst(2)
+            } else if first.hasPrefix("--state-dir=") {
+                let value = String(first.dropFirst("--state-dir=".count))
+                guard !value.isEmpty else { return invalid() }
+                explicitStateDirectory = value
+                remaining.removeFirst()
+            } else {
+                break
+            }
+        }
+        guard let command = remaining.first else {
             return CLIResult(code: 2, stderr: invalidArguments)
         }
 
         switch command {
         case "--version":
-            guard arguments.count == 1 else { return invalid() }
+            guard remaining.count == 1 else { return invalid() }
             return CLIResult(code: 0, stdout: "je \(JEVersion.current)\n")
         case "--help", "-h", "help":
-            guard arguments.count == 1 else { return invalid() }
+            guard remaining.count == 1 else { return invalid() }
             return CLIResult(code: 0, stdout: helpText)
         case "status":
-            return status(arguments: arguments)
+            return status(arguments: remaining)
         case "support-matrix":
-            return supportMatrix(arguments: arguments)
+            return supportMatrix(arguments: remaining)
         case "contracts":
-            return contracts(arguments: arguments)
+            return contracts(arguments: remaining)
+        case "profile":
+            return profile(
+                arguments: remaining,
+                explicitStateDirectory: explicitStateDirectory,
+                environment: environment
+            )
         case "workspace":
             return CLIResult(
                 code: 2,
@@ -92,6 +119,64 @@ public enum JECommandLine {
         """)
     }
 
+    private static func profile(
+        arguments: [String],
+        explicitStateDirectory: String?,
+        environment: [String: String]
+    ) -> CLIResult {
+        guard arguments.count >= 2 else { return invalid() }
+        if arguments[1] == "add" || arguments[1] == "remove" {
+            return CLIResult(
+                code: 2,
+                stderr: "Profile writes are not ported to the native core yet. Use the released Python client for now.\n"
+            )
+        }
+        let store = ProfileStore(directory: stateDirectory(
+            explicit: explicitStateDirectory,
+            environment: environment
+        ))
+        do {
+            if arguments == ["profile", "list"] {
+                let names = try store.listProfiles()
+                let output = names.isEmpty
+                    ? "No saved connections. Run je profile add --help.\n"
+                    : names.joined(separator: "\n") + "\n"
+                return CLIResult(code: 0, stdout: output)
+            }
+            if arguments.count == 3 && arguments[1] == "show" {
+                return json(try store.loadPublicProfile(name: arguments[2]))
+            }
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The connection profile could not be read.\n")
+        }
+        return invalid()
+    }
+
+    private static func stateDirectory(
+        explicit: String?,
+        environment: [String: String]
+    ) -> URL {
+        if let explicit, !explicit.isEmpty {
+            return URL(fileURLWithPath: (explicit as NSString).expandingTildeInPath)
+        }
+        for key in ["JE_STUDIO_HOME", "JE_GATEWAY_HOME"] {
+            if let value = environment[key], !value.isEmpty {
+                return URL(fileURLWithPath: (value as NSString).expandingTildeInPath)
+            }
+        }
+        let configHome: URL
+        if let xdg = environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
+            configHome = URL(fileURLWithPath: (xdg as NSString).expandingTildeInPath)
+        } else if let home = environment["HOME"], !home.isEmpty {
+            configHome = URL(fileURLWithPath: home).appendingPathComponent(".config")
+        } else {
+            configHome = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config")
+        }
+        return configHome.appendingPathComponent("je-gateway")
+    }
+
     private static func json<T: Encodable>(_ value: T) -> CLIResult {
         do {
             return CLIResult(code: 0, stdout: try StableJSON.encode(value))
@@ -105,7 +190,7 @@ public enum JECommandLine {
     }
 
     private static let helpText = """
-    usage: je [--version] <command>
+    usage: je [--version] [--state-dir DIR] <command>
 
     Experimental native user core for je.
 
@@ -113,8 +198,10 @@ public enum JECommandLine {
       status [--json]          Show native core and support status
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
+      profile list             List saved connection names without credentials
+      profile show NAME        Show public connection fields without credentials
 
-    Released Python commands are not ported yet. Host administration stays
+    Other released Python commands are not ported yet. Host administration stays
     outside the user artifact.
 
     """
