@@ -20,7 +20,9 @@ public enum JECommandLine {
 
     public static func run(
         _ arguments: [String],
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        recordedDay: String? = nil,
+        runID: String? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -55,6 +57,18 @@ public enum JECommandLine {
             return supportMatrix(arguments: remaining)
         case "contracts":
             return contracts(arguments: remaining)
+        case "why", "ask":
+            return AskWhyCommand.run(
+                command: command,
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                recordedDay: recordedDay,
+                runID: runID
+            )
         case "profile":
             return profile(
                 arguments: remaining,
@@ -294,6 +308,8 @@ public enum JECommandLine {
       memory show NAME         Show public memory fields without tokens
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
+      why [flags] [--] PROMPT  Explain the selected qualified route without running it
+      ask [flags] -- PROMPT    Select and show a route, then stop before unported launch
 
     Other released Python commands are not ported yet. Host administration stays
     outside the user artifact.

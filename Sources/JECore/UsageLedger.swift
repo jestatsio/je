@@ -1,3 +1,5 @@
+import Foundation
+
 public enum RunOutcome: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
     case succeeded
     case failed
@@ -233,5 +235,99 @@ public extension UsageLedger {
         costs.reduce(into: [String: Int64]()) { result, cost in
             result[cost.currency, default: 0] += cost.minorUnits
         }
+    }
+}
+
+public struct UsageLedgerFile: Sendable {
+    public let directory: URL
+    private let stateStore: ProfileStore
+
+    public init(directory: URL) {
+        self.directory = directory.standardizedFileURL
+        self.stateStore = ProfileStore(directory: directory)
+    }
+
+    public var usageDirectory: URL {
+        directory.appendingPathComponent("usage", isDirectory: true)
+    }
+
+    public var ledgerURL: URL {
+        usageDirectory.appendingPathComponent("detailed.jsonl")
+    }
+
+    public func load() throws -> UsageLedger {
+        guard try stateStore.checkPrivateDirectory(directory) else {
+            return UsageLedger()
+        }
+        guard try stateStore.checkPrivateDirectory(usageDirectory) else {
+            return UsageLedger()
+        }
+        if !FileManager.default.fileExists(atPath: ledgerURL.path) {
+            if (try? FileManager.default.destinationOfSymbolicLink(atPath: ledgerURL.path)) != nil {
+                throw StateStoreError("The usage ledger could not be read.")
+            }
+            return UsageLedger()
+        }
+        let data = try stateStore.readPrivateData(ledgerURL, limit: 16 * 1024 * 1024)
+        let decoder = JSONDecoder()
+        var entries: [DetailedUsageTrace] = []
+        for line in data.split(separator: 10, omittingEmptySubsequences: true) {
+            do {
+                entries.append(try decoder.decode(DetailedUsageTrace.self, from: Data(line)))
+            } catch {
+                throw StateStoreError("The usage ledger is invalid; no contents were displayed.")
+            }
+        }
+        do {
+            return try UsageLedger(entries: entries)
+        } catch {
+            throw StateStoreError("The usage ledger contains an invalid or conflicting entry.")
+        }
+    }
+
+    @discardableResult
+    public func append(_ entry: DetailedUsageTrace) throws -> Bool {
+        do {
+            try UsageLedger.validate(entry)
+        } catch {
+            throw StateStoreError("The usage trace is invalid.")
+        }
+        var ledger = try load()
+        let added: Bool
+        do {
+            added = try ledger.append(entry)
+        } catch {
+            throw StateStoreError("The usage ledger contains a conflicting run identity.")
+        }
+        guard added else { return false }
+
+        try stateStore.ensurePrivateDirectory(directory)
+        try stateStore.ensurePrivateDirectory(usageDirectory)
+        let line: Data
+        do {
+            line = try StableJSON.encodeLine(entry)
+        } catch {
+            throw StateStoreError("The usage trace could not be encoded.")
+        }
+        if FileManager.default.fileExists(atPath: ledgerURL.path) {
+            do {
+                let handle = try FileHandle(forWritingTo: ledgerURL)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: line)
+                try handle.synchronize()
+            } catch {
+                throw StateStoreError("The usage trace could not be recorded.")
+            }
+        } else {
+            guard FileManager.default.createFile(
+                atPath: ledgerURL.path,
+                contents: line,
+                attributes: [.posixPermissions: 0o600]
+            ) else {
+                throw StateStoreError("The usage trace could not be recorded.")
+            }
+        }
+        return true
     }
 }

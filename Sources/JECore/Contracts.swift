@@ -81,4 +81,12 @@ public enum StableJSON {
         let data = try encoder.encode(value)
         return String(decoding: data, as: UTF8.self) + "\n"
     }
+
+    public static func encodeLine<T: Encodable>(_ value: T) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        var data = try encoder.encode(value)
+        data.append(10)
+        return data
+    }
 }

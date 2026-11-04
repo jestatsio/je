@@ -32,14 +32,19 @@ foundation slice, not a claim that the launch platform is complete.
 - A content-free usage ledger core with duplicate-safe run identities and
   daily aggregates that keep actual cost, estimated cost, and unknown
   measurements distinct.
+- A private assignment registry that builds routing candidates only for cells
+  in the launch support matrix.
+- `je why` route explanations and a first `je ask` route selection path. Ask
+  records a content-free waiting usage trace, then stops before launch because
+  harness launch is not ported yet.
 
 ## What this slice does not contain
 
 - Connection writes and checks, native Ollama launch, connect, run, doctor,
   export, or credential commands.
 - Harness launch, engine lifecycle, broker traffic, memory sync, history
-  storage, credential migration, or remote access. Routing and ledger code
-  exist only as library cores. Neither is wired to `je ask` yet.
+  storage, credential migration, or remote access. `je ask` therefore selects
+  and records a route but does not run the task yet.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
   until recorded qualification evidence exists.
 
@@ -51,6 +56,7 @@ swift run je --version
 swift run je status --json
 swift run je support-matrix --json
 swift run je contracts --json
+swift run je why --person alice --role fast --json -- "Explain this repo"
 ```
 
 ## Next slices

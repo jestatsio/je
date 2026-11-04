@@ -296,7 +296,7 @@ public struct ProfileStore: Sendable {
         return folder
     }
 
-    private func checkPrivateDirectory(_ url: URL) throws -> Bool {
+    func checkPrivateDirectory(_ url: URL) throws -> Bool {
         guard let info = statInfo(url) else {
             if isSymbolicLinkPath(url) {
                 throw StateStoreError("State directories must be owned by you, private, and not symlinks.")
@@ -309,7 +309,23 @@ public struct ProfileStore: Sendable {
         return true
     }
 
-    private func readPrivateData(_ url: URL, limit: Int = 64 * 1024) throws -> Data {
+    func ensurePrivateDirectory(_ url: URL) throws {
+        if try checkPrivateDirectory(url) {
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: url,
+                withIntermediateDirectories: false,
+                attributes: [.posixPermissions: 0o700]
+            )
+        } catch {
+            throw StateStoreError("Cannot create the private state directory.")
+        }
+        _ = try checkPrivateDirectory(url)
+    }
+
+    func readPrivateData(_ url: URL, limit: Int = 64 * 1024) throws -> Data {
         guard let info = statInfo(url) else {
             throw StateStoreError("The requested private file does not exist.")
         }

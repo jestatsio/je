@@ -19,6 +19,11 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
     public let executionPlace: ExecutionPlace
     public let providerKind: ProviderKind
     public let modelArtifact: String
+    public let engineVersion: String
+    public let modelFormat: String
+    public let protocolImplementation: String
+    public let protocolVersion: String
+    public let configurationDigest: String
     public let qualificationStatus: QualificationStatus
     public let allowedPersonIDs: Set<String>
     public let cloudProfileReference: String?
@@ -34,6 +39,11 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
         executionPlace: ExecutionPlace,
         providerKind: ProviderKind,
         modelArtifact: String,
+        engineVersion: String = "",
+        modelFormat: String = "",
+        protocolImplementation: String = "",
+        protocolVersion: String = "",
+        configurationDigest: String = "",
         qualificationStatus: QualificationStatus,
         allowedPersonIDs: Set<String>,
         cloudProfileReference: String? = nil,
@@ -48,6 +58,11 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
         self.executionPlace = executionPlace
         self.providerKind = providerKind
         self.modelArtifact = modelArtifact
+        self.engineVersion = engineVersion
+        self.modelFormat = modelFormat
+        self.protocolImplementation = protocolImplementation
+        self.protocolVersion = protocolVersion
+        self.configurationDigest = configurationDigest
         self.qualificationStatus = qualificationStatus
         self.allowedPersonIDs = allowedPersonIDs
         self.cloudProfileReference = cloudProfileReference
