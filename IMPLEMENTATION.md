@@ -26,13 +26,17 @@ foundation slice, not a claim that the launch platform is complete.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
 - Read-only gateway, memory, and native Ollama profile list and show parity,
   including strict legacy schemas and private directory and file checks.
+- A deterministic routing policy core with hard filters, settled preference
+  layers, explicit cloud authorization, replayable filter results, and traced
+  advisory scores that do not change the starter route.
 
 ## What this slice does not contain
 
 - Connection writes and checks, native Ollama launch, connect, run, doctor,
   export, or credential commands.
-- Model routing, harness launch, engine lifecycle, broker traffic, memory
-  sync, history storage, credential migration, or remote access.
+- Harness launch, engine lifecycle, broker traffic, memory sync, history
+  storage, credential migration, or remote access. Routing exists only as a
+  library policy core. It is not wired to `je ask` yet.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
   until recorded qualification evidence exists.
 
