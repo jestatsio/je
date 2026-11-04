@@ -8,11 +8,13 @@ let package = Package(
     ],
     products: [
         .library(name: "JECore", targets: ["JECore"]),
-        .executable(name: "je", targets: ["je"])
+        .executable(name: "je", targets: ["je"]),
+        .executable(name: "je-secret-helper", targets: ["je-secret-helper"])
     ],
     targets: [
         .target(name: "JECore"),
         .executableTarget(name: "je", dependencies: ["JECore"]),
+        .executableTarget(name: "je-secret-helper", dependencies: ["JECore"]),
         .testTarget(name: "JECoreTests", dependencies: ["JECore"])
     ]
 )

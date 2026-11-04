@@ -127,13 +127,15 @@ final class ProfileStoreTests: XCTestCase {
         XCTAssertEqual(try store.listProfiles(), ["bob"])
     }
 
-    func testProfileAddStaysUnportedAndDoesNotEchoArguments() {
+    func testCatalogProfileAddStaysUnportedAndDoesNotEchoArguments() {
         let result = JECommandLine.run(
-            ["--state-dir", stateDirectory.path, "profile", "add", "alice", "--key-env", secret],
-            environment: [:]
+            ["--state-dir", stateDirectory.path, "profile", "add", "alice",
+             "--endpoint", "https://models.example.test", "--model", "local-fast",
+             "--key-env", "JE_TEST_KEY", "--codex-catalog", "/tmp/\(secret).json"],
+            environment: ["JE_TEST_KEY": secret]
         )
         XCTAssertEqual(result.code, 2)
-        XCTAssertTrue(result.stderr.contains("Profile writes are not ported"))
+        XCTAssertTrue(result.stderr.contains("catalog binding is not ported"))
         XCTAssertFalse((result.stdout + result.stderr).contains(secret))
     }
 

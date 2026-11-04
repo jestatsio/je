@@ -80,9 +80,41 @@ private struct LegacyOllamaProfile {
     }
 }
 
+public struct ResolvedConnectionProfile: Equatable, Sendable {
+    public let name: String
+    public let endpoint: String
+    public let secret: String
+    public let model: String
+    public let contextWindow: Int?
+    public let codexCatalog: CodexCatalogBinding?
+
+    public var apiBase: String {
+        endpoint + "/v1"
+    }
+}
+
+private struct NativeProfileFile: Encodable {
+    let schemaVersion: Int
+    let endpoint: String
+    let secretReference: String
+    let model: String
+    let contextWindow: Int?
+    let codexCatalog: CodexCatalogBinding?
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case endpoint
+        case secretReference = "secret_reference"
+        case model
+        case contextWindow = "context_window"
+        case codexCatalog = "codex_catalog"
+    }
+}
+
 private struct LegacyProfile {
     let endpoint: String
-    let secret: String
+    let secret: String?
+    let secretReference: String?
     let model: String
     let contextWindow: Int?
     let codexCatalog: CodexCatalogBinding?
@@ -113,6 +145,215 @@ public struct ProfileStore: Sendable {
 
     public func loadPublicProfile(name: String) throws -> PublicConnectionProfile {
         try loadLegacyProfile(name: name).publicProfile(name: name)
+    }
+
+    public func loadResolvedProfile(
+        name: String,
+        secretStore: SecretStoring
+    ) throws -> ResolvedConnectionProfile {
+        let profile = try loadLegacyProfile(name: name)
+        let secret: String
+        if let embedded = profile.secret {
+            secret = embedded
+        } else if let reference = profile.secretReference {
+            do {
+                guard let stored = try secretStore.secret(reference: reference) else {
+                    throw StateStoreError("The saved gateway credential could not be found in native secret storage.")
+                }
+                secret = stored
+            } catch let error as SecretStoreError {
+                throw StateStoreError(error.message)
+            }
+            try validateSecret(secret)
+            if name.contains(secret) || profile.endpoint.contains(secret) || profile.model.contains(secret) {
+                throw StateStoreError("Keep gateway credentials out of public profile fields.")
+            }
+            if let binding = profile.codexCatalog {
+                try validateCatalog(binding, secret: secret)
+            }
+        } else {
+            throw StateStoreError("The connection profile is invalid; no contents were displayed.")
+        }
+        return ResolvedConnectionProfile(
+            name: name,
+            endpoint: profile.endpoint,
+            secret: secret,
+            model: profile.model,
+            contextWindow: profile.contextWindow,
+            codexCatalog: profile.codexCatalog
+        )
+    }
+
+    public func saveNativeProfile(
+        name: String,
+        endpoint rawEndpoint: String,
+        secret: String,
+        model: String,
+        contextWindow: Int?,
+        secretStore: SecretStoring,
+        replace: Bool = false
+    ) throws {
+        try validateProfileName(name)
+        let endpoint = try normalizedEndpoint(rawEndpoint)
+        try validateSecret(secret)
+        try validateModel(model)
+        if let contextWindow, contextWindow <= 0 {
+            throw StateStoreError("The model context window must be a positive integer.")
+        }
+        if name.contains(secret) || endpoint.contains(secret) || model.contains(secret) {
+            throw StateStoreError("Keep gateway credentials out of public profile fields.")
+        }
+        let folder = try ensureFolder(named: "profiles")
+        let path = folder.appendingPathComponent(name + ".json")
+        let existed = pathExists(path)
+        var oldReference: String?
+        if existed {
+            guard replace else {
+                throw StateStoreError("That profile already exists; use explicit replacement to update it.")
+            }
+            oldReference = try loadLegacyProfile(name: name).secretReference
+        }
+        let reference = "gateway/profile/\(name)/\(UUID().uuidString.lowercased())"
+        do {
+            try secretStore.setSecret(secret, reference: reference)
+            guard try secretStore.secret(reference: reference) == secret else {
+                throw SecretStoreError.operationFailed
+            }
+        } catch let error as SecretStoreError {
+            throw StateStoreError(error.message)
+        }
+
+        let file = NativeProfileFile(
+            schemaVersion: 3,
+            endpoint: rawEndpoint,
+            secretReference: reference,
+            model: model,
+            contextWindow: contextWindow,
+            codexCatalog: nil
+        )
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            var data = try encoder.encode(file)
+            data.append(10)
+            try writePrivateJSONData(data, to: path, replace: replace)
+        } catch {
+            try? secretStore.deleteSecret(reference: reference)
+            if let error = error as? StateStoreError {
+                throw error
+            }
+            throw StateStoreError("Could not save private state; the previous file was preserved.")
+        }
+
+        if let oldReference, oldReference != reference,
+           !(try referencedSecretReferences().contains(oldReference)) {
+            try? secretStore.deleteSecret(reference: oldReference)
+        }
+    }
+
+    public func deleteProfile(name: String) throws {
+        try deleteProfile(name: name, secretStore: nil, deleteSecret: false)
+    }
+
+    public func deleteProfile(
+        name: String,
+        secretStore: SecretStoring?,
+        deleteSecret: Bool
+    ) throws {
+        try validateProfileName(name)
+        let oldReference = try loadLegacyProfile(name: name).secretReference
+        let path = try folder(named: "profiles").appendingPathComponent(name + ".json")
+        _ = try readPrivateData(path)
+        do {
+            try FileManager.default.removeItem(at: path)
+        } catch {
+            throw StateStoreError("Cannot remove the connection profile.")
+        }
+        if deleteSecret, let oldReference, let secretStore,
+           !(try referencedSecretReferences().contains(oldReference)) {
+            do {
+                try secretStore.deleteSecret(reference: oldReference)
+            } catch let error as SecretStoreError {
+                throw StateStoreError(error.message)
+            }
+        }
+    }
+
+    public func readSecretFile(at url: URL) throws -> String {
+        let data = try readPrivateData(url)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw StateStoreError("Cannot read the private file.")
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func referencedSecretReferences() throws -> Set<String> {
+        var references: Set<String> = []
+        for name in try listProfiles() {
+            if let reference = try loadLegacyProfile(name: name).secretReference {
+                references.insert(reference)
+            }
+        }
+        return references
+    }
+
+    private func ensureFolder(named name: String) throws -> URL {
+        try ensurePrivateDirectory(directory)
+        let folder = directory.appendingPathComponent(name, isDirectory: true)
+        try ensurePrivateDirectory(folder)
+        return folder
+    }
+
+    private func pathExists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+            || (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) != nil
+    }
+
+    private func writePrivateJSONData(_ data: Data, to path: URL, replace: Bool) throws {
+        if pathExists(path) {
+            _ = try readPrivateData(path)
+        }
+        let temporary = path.deletingLastPathComponent()
+            .appendingPathComponent(".pending-\(UUID().uuidString.lowercased())")
+        do {
+            guard FileManager.default.createFile(
+                atPath: temporary.path,
+                contents: nil,
+                attributes: [.posixPermissions: 0o600]
+            ) else {
+                throw StateStoreError("Could not save private state; the previous file was preserved.")
+            }
+            let handle = try FileHandle(forWritingTo: temporary)
+            do {
+                try handle.write(contentsOf: data)
+                try handle.synchronize()
+                try handle.close()
+            } catch {
+                try? handle.close()
+                throw error
+            }
+            if replace {
+                if pathExists(path) {
+                    _ = try FileManager.default.replaceItemAt(path, withItemAt: temporary)
+                } else {
+                    try FileManager.default.moveItem(at: temporary, to: path)
+                }
+            } else {
+                do {
+                    try FileManager.default.linkItem(at: temporary, to: path)
+                } catch {
+                    throw StateStoreError("That profile already exists; use explicit replacement to update it.")
+                }
+                try? FileManager.default.removeItem(at: temporary)
+            }
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path.path)
+        } catch let error as StateStoreError {
+            try? FileManager.default.removeItem(at: temporary)
+            throw error
+        } catch {
+            try? FileManager.default.removeItem(at: temporary)
+            throw StateStoreError("Could not save private state; the previous file was preserved.")
+        }
     }
 
     public func listMemoryProfiles() throws -> [String] {
@@ -178,33 +419,53 @@ public struct ProfileStore: Sendable {
             guard let value = object as? [String: Any] else {
                 throw StateStoreError("Unsupported connection profile format.")
             }
-            guard let schemaVersion = exactInt(value["schema_version"]), [1, 2].contains(schemaVersion) else {
+            guard let schemaVersion = exactInt(value["schema_version"]), [1, 2, 3].contains(schemaVersion) else {
                 throw StateStoreError("Unsupported connection profile format.")
             }
             var binding: CodexCatalogBinding?
-            if schemaVersion == 2 {
+            if schemaVersion == 2 || (schemaVersion == 3 && value["codex_catalog"] != nil) {
                 binding = try catalogBinding(value["codex_catalog"])
             } else if value["codex_catalog"] != nil {
-                throw StateStoreError("Catalog bindings require connection profile format version 2.")
+                throw StateStoreError("Catalog bindings require connection profile format version 2 or 3.")
+            }
+            let secret: String?
+            let secretReference: String?
+            if schemaVersion == 3 {
+                guard value["api_key"] == nil,
+                      let reference = value["secret_reference"] as? String,
+                      SecretReferenceValidator.isValid(reference) else {
+                    throw StateStoreError("The connection profile is invalid; no contents were displayed.")
+                }
+                secret = nil
+                secretReference = reference
+            } else {
+                guard value["secret_reference"] == nil,
+                      let embedded = value["api_key"] as? String else {
+                    throw StateStoreError("The connection profile is invalid; no contents were displayed.")
+                }
+                secret = embedded
+                secretReference = nil
+                try validateSecret(embedded)
             }
             guard let endpointRaw = value["endpoint"] as? String,
-                  let secret = value["api_key"] as? String,
                   let model = value["model"] as? String else {
                 throw StateStoreError("The connection profile is invalid; no contents were displayed.")
             }
             let context = try contextWindow(value["context_window"])
             let endpoint = try normalizedEndpoint(endpointRaw)
-            try validateSecret(secret)
             try validateModel(model)
-            if name.contains(secret) || endpoint.contains(secret) || model.contains(secret) {
-                throw StateStoreError("Keep gateway credentials out of public profile fields.")
-            }
-            if let binding {
-                try validateCatalog(binding, secret: secret)
+            if let secret {
+                if name.contains(secret) || endpoint.contains(secret) || model.contains(secret) {
+                    throw StateStoreError("Keep gateway credentials out of public profile fields.")
+                }
+                if let binding {
+                    try validateCatalog(binding, secret: secret)
+                }
             }
             return LegacyProfile(
                 endpoint: endpoint,
                 secret: secret,
+                secretReference: secretReference,
                 model: model,
                 contextWindow: context,
                 codexCatalog: binding

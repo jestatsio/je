@@ -11,8 +11,10 @@ foundation slice, not a claim that the launch platform is complete.
   oracle during the port.
 - The user artifact must build without host-only workspace, network, or
   service-control modules.
-- Apple-only helper work stays outside the portable core until a signed helper
-  boundary is implemented and qualified.
+- Apple-only credential work lives in `je-secret-helper`. It uses macOS
+  Keychain generic passwords through a narrow JSON stdin and stdout protocol.
+  Secrets never travel in process arguments. Signing and notarization of the
+  helper remain release work.
 
 ## What this slice contains
 
@@ -24,8 +26,9 @@ foundation slice, not a claim that the launch platform is complete.
   harnesses, launch modes, execution places, and qualification status.
 - A user-artifact boundary model with a test that rejects host-only modules.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
-- Read-only gateway, memory, and native Ollama profile list and show parity,
-  including strict legacy schemas and private directory and file checks.
+- Read-only memory and native Ollama profile parity, plus gateway profile list,
+  show, native schema 3 writes, and removal. Legacy schema 1 and 2 files keep
+  their strict private-file checks.
 - A deterministic routing policy core with hard filters, settled preference
   layers, explicit cloud authorization, replayable filter results, and traced
   advisory scores that do not change the starter route.
@@ -41,8 +44,9 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Connection writes and checks, native Ollama launch, connect, run, doctor,
-  export, or credential commands.
+- Memory and native Ollama profile writes and checks, gateway catalog-bound
+  profile writes, native Ollama launch, connect, run, doctor, export, or
+  credential commands.
 - Harness launch, engine lifecycle, broker traffic, memory sync, history
   storage, credential migration, or remote access. `je ask` therefore selects
   and records a route but does not run the task yet.

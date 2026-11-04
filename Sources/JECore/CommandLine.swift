@@ -22,7 +22,8 @@ public enum JECommandLine {
         _ arguments: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment,
         recordedDay: String? = nil,
-        runID: String? = nil
+        runID: String? = nil,
+        secretStore: SecretStoring? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -78,10 +79,14 @@ public enum JECommandLine {
                 runID: runID
             )
         case "profile":
-            return profile(
+            return ProfileCommands.run(
                 arguments: remaining,
-                explicitStateDirectory: explicitStateDirectory,
-                environment: environment
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore
             )
         case "memory":
             return memory(
@@ -151,41 +156,6 @@ public enum JECommandLine {
         \(OracleContract.frozen.invalidArgumentBehavior)
 
         """)
-    }
-
-    private static func profile(
-        arguments: [String],
-        explicitStateDirectory: String?,
-        environment: [String: String]
-    ) -> CLIResult {
-        guard arguments.count >= 2 else { return invalid() }
-        if arguments[1] == "add" || arguments[1] == "remove" {
-            return CLIResult(
-                code: 2,
-                stderr: "Profile writes are not ported to the native core yet. Use the released Python client for now.\n"
-            )
-        }
-        let store = ProfileStore(directory: stateDirectory(
-            explicit: explicitStateDirectory,
-            environment: environment
-        ))
-        do {
-            if arguments == ["profile", "list"] {
-                let names = try store.listProfiles()
-                let output = names.isEmpty
-                    ? "No saved connections. Run je profile add --help.\n"
-                    : names.joined(separator: "\n") + "\n"
-                return CLIResult(code: 0, stdout: output)
-            }
-            if arguments.count == 3 && arguments[1] == "show" {
-                return json(try store.loadPublicProfile(name: arguments[2]))
-            }
-        } catch let error as StateStoreError {
-            return CLIResult(code: 2, stderr: error.message + "\n")
-        } catch {
-            return CLIResult(code: 2, stderr: "The connection profile could not be read.\n")
-        }
-        return invalid()
     }
 
     private static func memory(
