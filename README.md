@@ -97,7 +97,7 @@ je checks the connection first, then hands the harness temporary session setting
 
 The next stage turns je from a connection launcher into the front door for local AI work. That identity is now settled, and it is being built for the small trusted Studio group from day one. You run `je ask "..."`, layered policy resolves the initial route, je shows that route and why, and a local model does the work in a harness you already trust, on your own machine or in your Studio workspace. Cloud models stay available through each person's configured profiles and defaults for the jobs that need them. One codebase will ship that user front door separately from the operator host build on the Studio. The current release still works as the explicit launcher described above.
 
-The details are being decided in the open, one question at a time. [ROADMAP.md](ROADMAP.md) holds the settled calls, the remaining open questions, and a provisional build order for the Mac Studio arriving in December 2026. It also covers routing, model roles and inference engines, qualification, background jobs, shared memory and its bounded offline cache, Keychain storage, and the path to publishing the source.
+The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds the Final settled calls and a provisional build order for the Mac Studio arriving in December 2026. It covers routing, model roles and inference engines, qualification, background jobs, shared memory and its bounded offline cache, Keychain storage, and publishing the user core source.
 
 ## This repository
 
@@ -105,10 +105,13 @@ The details are being decided in the open, one question at a time. [ROADMAP.md](
 | --- | --- |
 | [docs/](docs/) | The documentation site published at jestatsio.github.io/je. |
 | [plugins/je/](plugins/je/) | The shared connection, status, and memory skills for Codex and Claude Code. |
-| [ROADMAP.md](ROADMAP.md) | The product direction, settled decisions, and open questions. |
+| [Sources/](Sources/) | The experimental Swift user core and command line. |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | The current native core build slice and its limits. |
+| [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) | The launch qualification matrix and its rules. |
+| [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with third-party notices and SHA-256 checksums. |
 
-The application source is maintained privately today. The public roadmap records the plan to change that, starting with the client.
+The experimental native user core now develops here under Apache-2.0. The released user client remains the current packaged build until a native port passes its parity checks. Host and service operations stay private.
 
 ## Service access
 
