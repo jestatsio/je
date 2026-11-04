@@ -42,6 +42,44 @@ public struct PublicConnectionProfile: Codable, Equatable, Sendable {
     }
 }
 
+public struct PublicMemoryProfile: Codable, Equatable, Sendable {
+    public let name: String
+    public let endpoint: String
+    public let serverName: String
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case endpoint
+        case serverName = "server_name"
+    }
+}
+
+public struct PublicOllamaProfile: Codable, Equatable, Sendable {
+    public let name: String
+    public let endpoint: String
+    public let model: String
+}
+
+private struct LegacyMemoryProfile {
+    let endpoint: String
+    let secret: String
+    let serverName: String
+
+    func publicProfile(name: String) -> PublicMemoryProfile {
+        PublicMemoryProfile(name: name, endpoint: endpoint, serverName: serverName)
+    }
+}
+
+private struct LegacyOllamaProfile {
+    let endpoint: String
+    let secret: String
+    let model: String
+
+    func publicProfile(name: String) -> PublicOllamaProfile {
+        PublicOllamaProfile(name: name, endpoint: endpoint, model: model)
+    }
+}
+
 private struct LegacyProfile {
     let endpoint: String
     let secret: String
@@ -68,7 +106,41 @@ public struct ProfileStore: Sendable {
     }
 
     public func listProfiles() throws -> [String] {
-        let folder = try profilesFolder()
+        try listProfileNames(folderName: "profiles", failure: "Cannot list connection profiles.") { name in
+            _ = try loadLegacyProfile(name: name)
+        }
+    }
+
+    public func loadPublicProfile(name: String) throws -> PublicConnectionProfile {
+        try loadLegacyProfile(name: name).publicProfile(name: name)
+    }
+
+    public func listMemoryProfiles() throws -> [String] {
+        try listProfileNames(folderName: "memory-profiles", failure: "Cannot list memory profiles.") { name in
+            _ = try loadLegacyMemoryProfile(name: name)
+        }
+    }
+
+    public func loadPublicMemoryProfile(name: String) throws -> PublicMemoryProfile {
+        try loadLegacyMemoryProfile(name: name).publicProfile(name: name)
+    }
+
+    public func listOllamaProfiles() throws -> [String] {
+        try listProfileNames(folderName: "ollama-profiles", failure: "Cannot list native Ollama profiles.") { name in
+            _ = try loadLegacyOllamaProfile(name: name)
+        }
+    }
+
+    public func loadPublicOllamaProfile(name: String) throws -> PublicOllamaProfile {
+        try loadLegacyOllamaProfile(name: name).publicProfile(name: name)
+    }
+
+    private func listProfileNames(
+        folderName: String,
+        failure: String,
+        validate: (String) throws -> Void
+    ) throws -> [String] {
+        let folder = try folder(named: folderName)
         guard FileManager.default.fileExists(atPath: folder.path) else {
             return []
         }
@@ -80,7 +152,7 @@ public struct ProfileStore: Sendable {
                 options: []
             )
         } catch {
-            throw StateStoreError("Cannot list connection profiles.")
+            throw StateStoreError(failure)
         }
         let names = entries.compactMap { url -> String? in
             guard url.pathExtension == "json" else { return nil }
@@ -90,20 +162,16 @@ public struct ProfileStore: Sendable {
             return name
         }.sorted()
         for name in names {
-            _ = try loadLegacyProfile(name: name)
+            try validate(name)
         }
         return names
-    }
-
-    public func loadPublicProfile(name: String) throws -> PublicConnectionProfile {
-        try loadLegacyProfile(name: name).publicProfile(name: name)
     }
 
     private func loadLegacyProfile(name: String) throws -> LegacyProfile {
         guard ProfileNameValidator.isValid(name) else {
             throw StateStoreError("Use a profile name with 1-64 letters, numbers, dots, underscores, or hyphens.")
         }
-        let path = try profilesFolder().appendingPathComponent(name + ".json")
+        let path = try folder(named: "profiles").appendingPathComponent(name + ".json")
         let raw = try readPrivateData(path)
         do {
             let object = try JSONSerialization.jsonObject(with: raw, options: [])
@@ -148,9 +216,80 @@ public struct ProfileStore: Sendable {
         }
     }
 
-    private func profilesFolder() throws -> URL {
+    private func loadLegacyMemoryProfile(name: String) throws -> LegacyMemoryProfile {
+        try validateProfileName(name)
+        let path = try folder(named: "memory-profiles").appendingPathComponent(name + ".json")
+        let raw = try readPrivateData(path)
+        do {
+            if hasDuplicateTopLevelKeys(raw) {
+                throw StateStoreError("The memory profile contains duplicate fields.")
+            }
+            let object = try JSONSerialization.jsonObject(with: raw, options: [])
+            guard let value = object as? [String: Any],
+                  Set(value.keys) == ["schema_version", "endpoint", "token", "server_name"],
+                  exactInt(value["schema_version"]) == 1,
+                  let endpoint = value["endpoint"] as? String,
+                  let secret = value["token"] as? String,
+                  let serverName = value["server_name"] as? String else {
+                throw StateStoreError("Unsupported memory profile format.")
+            }
+            try validateSecret(secret)
+            guard isValidMemoryServerName(serverName) else {
+                throw StateStoreError("Use a memory server name of 1-64 ASCII letters, digits, underscores, or hyphens.")
+            }
+            _ = try normalizedEndpoint(endpoint)
+            if name.contains(secret) || endpoint.contains(secret) || serverName.contains(secret) {
+                throw StateStoreError("Keep memory credentials out of public profile fields.")
+            }
+            return LegacyMemoryProfile(endpoint: endpoint, secret: secret, serverName: serverName)
+        } catch let error as StateStoreError {
+            throw error
+        } catch {
+            throw StateStoreError("The memory profile is invalid; no contents were displayed.")
+        }
+    }
+
+    private func loadLegacyOllamaProfile(name: String) throws -> LegacyOllamaProfile {
+        try validateProfileName(name)
+        let path = try folder(named: "ollama-profiles").appendingPathComponent(name + ".json")
+        let raw = try readPrivateData(path)
+        do {
+            if hasDuplicateTopLevelKeys(raw) {
+                throw StateStoreError("The native Ollama profile contains duplicate fields.")
+            }
+            let object = try JSONSerialization.jsonObject(with: raw, options: [])
+            guard let value = object as? [String: Any],
+                  Set(value.keys) == ["schema_version", "endpoint", "api_key", "model"],
+                  exactInt(value["schema_version"]) == 1,
+                  let endpointRaw = value["endpoint"] as? String,
+                  let secret = value["api_key"] as? String,
+                  let model = value["model"] as? String else {
+                throw StateStoreError("Unsupported native Ollama profile format.")
+            }
+            guard isValidOllamaSecret(secret) else {
+                throw StateStoreError("A nonempty ASCII Bearer [REDACTED] is required for the Ollama service.")
+            }
+            guard isValidOllamaModel(model) else {
+                throw StateStoreError("Use a native model name of 1-256 ASCII letters, numbers, or model-name separators.")
+            }
+            let endpoint = try normalizedOllamaEndpoint(endpointRaw)
+            let decodedEndpoint = endpoint.removingPercentEncoding ?? endpoint
+            let decodedModel = model.removingPercentEncoding ?? model
+            if name.contains(secret) || endpoint.contains(secret) || decodedEndpoint.contains(secret)
+                || model.contains(secret) || decodedModel.contains(secret) {
+                throw StateStoreError("Keep the Ollama service credential out of public connection fields.")
+            }
+            return LegacyOllamaProfile(endpoint: endpoint, secret: secret, model: model)
+        } catch let error as StateStoreError {
+            throw error
+        } catch {
+            throw StateStoreError("The native Ollama profile is invalid; no contents were displayed.")
+        }
+    }
+
+    private func folder(named name: String) throws -> URL {
         let rootExists = try checkPrivateDirectory(directory)
-        let folder = directory.appendingPathComponent("profiles", isDirectory: true)
+        let folder = directory.appendingPathComponent(name, isDirectory: true)
         if rootExists {
             _ = try checkPrivateDirectory(folder)
         }
@@ -200,6 +339,84 @@ public struct ProfileStore: Sendable {
             throw StateStoreError("The model context window must be a positive integer.")
         }
         return value
+    }
+
+    private func validateProfileName(_ name: String) throws {
+        guard ProfileNameValidator.isValid(name) else {
+            throw StateStoreError("Use a profile name with 1-64 letters, numbers, dots, underscores, or hyphens.")
+        }
+    }
+
+    private func isValidMemoryServerName(_ value: String) -> Bool {
+        guard (1...64).contains(value.count) else { return false }
+        return value.unicodeScalars.allSatisfy { scalar in
+            (48...57).contains(scalar.value)
+                || (65...90).contains(scalar.value)
+                || (97...122).contains(scalar.value)
+                || scalar == "_" || scalar == "-"
+        }
+    }
+
+    private func isValidOllamaSecret(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 4096, value.allSatisfy({ $0.isASCII }) else {
+            return false
+        }
+        let base = value.dropLast(value.reversed().prefix { $0 == "=" }.count)
+        guard !base.isEmpty else { return false }
+        return base.allSatisfy { character in
+            character.isLetter || character.isNumber || "._~+/-".contains(character)
+        }
+    }
+
+    private func isValidOllamaModel(_ value: String) -> Bool {
+        let characters = Array(value)
+        guard (1...256).contains(characters.count), let first = characters.first, first.isASCII,
+              first.isLetter || first.isNumber else {
+            return false
+        }
+        return characters.allSatisfy { character in
+            character.isASCII && (character.isLetter || character.isNumber || "._:/@+-".contains(character))
+        }
+    }
+
+    private func normalizedOllamaEndpoint(_ endpoint: String) throws -> String {
+        _ = try normalizedEndpoint(endpoint)
+        guard endpoint.count <= 4096,
+              !endpoint.contains(where: { $0.isWhitespace }),
+              !endpoint.contains("\\"),
+              var components = URLComponents(string: endpoint),
+              let scheme = components.scheme?.lowercased(),
+              let host = components.host else {
+            throw StateStoreError("Use a complete HTTPS native Ollama root, or literal loopback HTTP, without /v1, credentials, query, or fragment.")
+        }
+        if scheme == "http" && !isLiteralLoopbackIP(host) {
+            throw StateStoreError("Use a complete HTTPS native Ollama root, or literal loopback HTTP, without /v1, credentials, query, or fragment.")
+        }
+        var path = components.percentEncodedPath
+        while path.hasSuffix("/") { path.removeLast() }
+        guard !path.hasSuffix("/v1") else {
+            throw StateStoreError("Use a complete HTTPS native Ollama root, or literal loopback HTTP, without /v1, credentials, query, or fragment.")
+        }
+        components.scheme = scheme
+        components.percentEncodedPath = path
+        components.query = nil
+        components.fragment = nil
+        guard let normalized = components.string else {
+            throw StateStoreError("Use a complete HTTPS native Ollama root, or literal loopback HTTP, without /v1, credentials, query, or fragment.")
+        }
+        return normalized
+    }
+
+    private func isLiteralLoopbackIP(_ host: String) -> Bool {
+        if host == "::1" {
+            return true
+        }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4, parts[0] == "127" else { return false }
+        return parts.allSatisfy { part in
+            guard let value = Int(part), (0...255).contains(value) else { return false }
+            return String(value) == part
+        }
     }
 
     private func catalogBinding(_ raw: Any?) throws -> CodexCatalogBinding {
@@ -316,6 +533,72 @@ public struct ProfileStore: Sendable {
             return nil
         }
         return number.intValue
+    }
+
+    private func hasDuplicateTopLevelKeys(_ raw: Data) -> Bool {
+        guard let text = String(data: raw, encoding: .utf8) else { return false }
+        var keys: Set<String> = []
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var expectingKey = false
+        var currentStringIsKey = false
+        var currentString = ""
+
+        for character in text {
+            if inString {
+                currentString.append(character)
+                if escaped {
+                    escaped = false
+                } else if character == "\\" {
+                    escaped = true
+                } else if character == "\"" {
+                    inString = false
+                    if currentStringIsKey {
+                        let key = decodeJSONString(currentString) ?? currentString
+                        if !keys.insert(key).inserted {
+                            return true
+                        }
+                    }
+                    currentString = ""
+                    currentStringIsKey = false
+                }
+                continue
+            }
+            switch character {
+            case "\"":
+                inString = true
+                currentString = "\""
+                currentStringIsKey = expectingKey && depth == 1
+            case "{", "[":
+                depth += 1
+                if character == "{" && depth == 1 {
+                    expectingKey = true
+                }
+            case "}", "]":
+                depth = max(0, depth - 1)
+                expectingKey = false
+            case ",":
+                if depth == 1 {
+                    expectingKey = true
+                }
+            case ":":
+                if depth == 1 {
+                    expectingKey = false
+                }
+            default:
+                break
+            }
+        }
+        return false
+    }
+
+    private func decodeJSONString(_ raw: String) -> String? {
+        guard let data = raw.data(using: .utf8),
+              let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
+            return nil
+        }
+        return value as? String
     }
 
     private func statInfo(_ url: URL) -> stat? {

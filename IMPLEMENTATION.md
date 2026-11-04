@@ -24,12 +24,13 @@ foundation slice, not a claim that the launch platform is complete.
   harnesses, launch modes, execution places, and qualification status.
 - A user-artifact boundary model with a test that rejects host-only modules.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
-- Read-only `profile list` and `profile show` parity for legacy schema 1 and
-  schema 2 connection files, including private directory and file checks.
+- Read-only gateway, memory, and native Ollama profile list and show parity,
+  including strict legacy schemas and private directory and file checks.
 
 ## What this slice does not contain
 
-- Profile writes, memory, connect, run, doctor, export, or credential commands.
+- Connection writes and checks, native Ollama launch, connect, run, doctor,
+  export, or credential commands.
 - Model routing, harness launch, engine lifecycle, broker traffic, memory
   sync, history storage, credential migration, or remote access.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
