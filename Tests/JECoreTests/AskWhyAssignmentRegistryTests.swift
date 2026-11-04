@@ -36,6 +36,8 @@ final class AskWhyAssignmentRegistryTests: XCTestCase {
         XCTAssertEqual(candidate.protocolVersion, "native-v1")
         XCTAssertEqual(candidate.configurationDigest, String(repeating: "a", count: 64))
         XCTAssertEqual(candidate.allowedPersonIDs, ["alice"])
+        XCTAssertEqual(candidate.connectionProfileName, "alice")
+        XCTAssertEqual(candidate.qualificationEvidenceReference, "evidence:test")
     }
 
     func testRegistryRejectsDuplicateOutsideCellAndCloudWithoutReference() throws {
@@ -161,6 +163,8 @@ final class AskWhyAssignmentRegistryTests: XCTestCase {
             + ",\"model_format\":\"gguf\",\"protocol_implementation\":\"ollama-native\""
             + ",\"protocol_version\":\"native-v1\",\"configuration_digest\":\"\(digest)\""
             + ",\"qualification_status\":\"\(status)\",\"allowed_person_ids\":[\"alice\"]"
-            + ",\"cloud_profile_reference\":\(cloud),\"available\":true,\"published_priority\":10}"
+            + ",\"cloud_profile_reference\":\(cloud),\"connection_profile_name\":\"alice\""
+            + ",\"qualification_evidence_reference\":\"evidence:test\""
+            + ",\"available\":true,\"published_priority\":10}"
     }
 }

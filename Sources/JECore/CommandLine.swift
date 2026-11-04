@@ -57,6 +57,14 @@ public enum JECommandLine {
             return supportMatrix(arguments: remaining)
         case "contracts":
             return contracts(arguments: remaining)
+        case "assignments":
+            return AssignmentCommands.run(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                )
+            )
         case "why", "ask":
             return AskWhyCommand.run(
                 command: command,
@@ -308,6 +316,8 @@ public enum JECommandLine {
       memory show NAME         Show public memory fields without tokens
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
+      assignments list         List locally published assignment IDs
+      assignments add ID ...   Publish one personal-machine assignment
       why [flags] [--] PROMPT  Explain the selected qualified route without running it
       ask [flags] -- PROMPT    Select and show a route, then stop before unported launch
 

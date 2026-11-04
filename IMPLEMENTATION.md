@@ -33,7 +33,8 @@ foundation slice, not a claim that the launch platform is complete.
   daily aggregates that keep actual cost, estimated cost, and unknown
   measurements distinct.
 - A private assignment registry that builds routing candidates only for cells
-  in the launch support matrix.
+  in the launch support matrix. The user artifact can author personal-machine
+  assignments with `je assignments`. Studio publication stays host-only.
 - `je why` route explanations and a first `je ask` route selection path. Ask
   records a content-free waiting usage trace, then stops before launch because
   harness launch is not ported yet.

@@ -27,6 +27,8 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
     public let qualificationStatus: QualificationStatus
     public let allowedPersonIDs: Set<String>
     public let cloudProfileReference: String?
+    public let connectionProfileName: String?
+    public let qualificationEvidenceReference: String?
     public let available: Bool
     public let publishedPriority: Int
 
@@ -47,6 +49,8 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
         qualificationStatus: QualificationStatus,
         allowedPersonIDs: Set<String>,
         cloudProfileReference: String? = nil,
+        connectionProfileName: String? = nil,
+        qualificationEvidenceReference: String? = nil,
         available: Bool = true,
         publishedPriority: Int = 100
     ) {
@@ -66,6 +70,8 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
         self.qualificationStatus = qualificationStatus
         self.allowedPersonIDs = allowedPersonIDs
         self.cloudProfileReference = cloudProfileReference
+        self.connectionProfileName = connectionProfileName
+        self.qualificationEvidenceReference = qualificationEvidenceReference
         self.available = available
         self.publishedPriority = publishedPriority
     }
