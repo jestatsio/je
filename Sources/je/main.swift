@@ -7,7 +7,12 @@ import Darwin
 import Glibc
 #endif
 
-let result = JECommandLine.run(Array(CommandLine.arguments.dropFirst()))
+let result = JECommandLine.run(
+    Array(CommandLine.arguments.dropFirst()),
+    stdoutSink: { text in
+        FileHandle.standardOutput.write(Data(text.utf8))
+    }
+)
 if !result.stdout.isEmpty {
     FileHandle.standardOutput.write(Data(result.stdout.utf8))
 }

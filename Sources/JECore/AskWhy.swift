@@ -12,6 +12,7 @@ public struct AskResult: Codable, Equatable, Sendable {
     public let runID: String?
     public let usageTraceRecorded: Bool
     public let launchStatus: String
+    public let harnessExitCode: Int32?
 }
 
 public enum AskWhyCommand {
@@ -23,7 +24,10 @@ public enum AskWhyCommand {
         stateDirectory: URL,
         environment: [String: String],
         recordedDay: String?,
-        runID: String?
+        runID: String?,
+        secretStore: SecretStoring? = nil,
+        harnessRunner: HarnessRunning? = nil,
+        stdoutSink: CLIOutputSink? = nil
     ) -> CLIResult {
         guard command == "why" || command == "ask" else {
             return invalid()
@@ -90,8 +94,12 @@ public enum AskWhyCommand {
             explanation: explanation,
             parsed: parsed,
             stateDirectory: stateDirectory,
+            environment: environment,
             recordedDay: recordedDay,
-            suppliedRunID: runID
+            suppliedRunID: runID,
+            secretStore: secretStore,
+            harnessRunner: harnessRunner,
+            stdoutSink: stdoutSink
         )
     }
 
@@ -99,15 +107,20 @@ public enum AskWhyCommand {
         explanation: RouteExplanation,
         parsed: ParsedArguments,
         stateDirectory: URL,
+        environment: [String: String],
         recordedDay: String?,
-        suppliedRunID: String?
+        suppliedRunID: String?,
+        secretStore: SecretStoring?,
+        harnessRunner: HarnessRunning?,
+        stdoutSink: CLIOutputSink?
     ) -> CLIResult {
         guard let candidate = explanation.selectedCandidate else {
             let result = AskResult(
                 explanation: explanation,
                 runID: nil,
                 usageTraceRecorded: false,
-                launchStatus: "no_qualified_route"
+                launchStatus: "no_qualified_route",
+                harnessExitCode: nil
             )
             if parsed.json {
                 return encode(result, code: 2, stderr: "No qualified route is available for this request.\n")
@@ -120,6 +133,53 @@ public enum AskWhyCommand {
         }
 
         let effectiveRunID = suppliedRunID ?? UUID().uuidString.lowercased()
+        let started = Date()
+        var harnessExitCode: Int32?
+        var launchStatus = "failed"
+        var launchError: String?
+        var emittedRoute = false
+
+        do {
+            guard let profileName = candidate.connectionProfileName else {
+                throw HarnessLaunchError.connectionProfileRequired
+            }
+            let store = secretStore ?? ProcessSecretStore.default(environment: environment)
+            let profile = try ProfileStore(directory: stateDirectory)
+                .loadResolvedProfile(name: profileName, secretStore: store)
+            let prepared = try HarnessLaunchPreparer().prepare(
+                candidate: candidate,
+                profile: profile,
+                prompt: parsed.prompt,
+                environment: environment,
+                executableOverride: parsed.executableOverride
+            )
+            if !parsed.json, let stdoutSink {
+                stdoutSink(humanExplanation(explanation))
+                emittedRoute = true
+            }
+            let runner = harnessRunner ?? ProcessHarnessRunner()
+            harnessExitCode = try runner.run(prepared.spec)
+            prepared.cleanup()
+            launchStatus = harnessExitCode == 0 ? "completed" : "failed"
+        } catch let error as HarnessLaunchError {
+            launchError = error.message
+            switch error {
+            case .unsupportedHarness, .catalogLaunchNotPorted:
+                launchStatus = "not_ported"
+            case .connectionProfileRequired:
+                launchStatus = "connection_profile_required"
+            case .executableUnavailable:
+                launchStatus = "executable_unavailable"
+            default:
+                launchStatus = "failed"
+            }
+        } catch let error as StateStoreError {
+            launchError = error.message
+        } catch {
+            launchError = HarnessLaunchError.launchFailed.message
+        }
+
+        let durationMs = Int64(max(0, Date().timeIntervalSince(started) * 1000).rounded())
         let trace = DetailedUsageTrace(
             runID: effectiveRunID,
             recordedDay: recordedDay ?? currentUTCDay(),
@@ -133,7 +193,8 @@ public enum AskWhyCommand {
             assignmentID: candidate.id,
             policyVersion: explanation.decision.policyVersion,
             winningLayer: explanation.decision.winningLayer,
-            outcome: .waiting
+            durationMs: durationMs,
+            outcome: launchStatus == "completed" ? .succeeded : .failed
         )
         var recorded = false
         do {
@@ -141,24 +202,26 @@ public enum AskWhyCommand {
         } catch {
             recorded = false
         }
+
         let result = AskResult(
             explanation: explanation,
             runID: effectiveRunID,
             usageTraceRecorded: recorded,
-            launchStatus: "not_ported"
+            launchStatus: launchStatus,
+            harnessExitCode: harnessExitCode
         )
+        let resultCode = harnessExitCode ?? 2
+        let stderr = launchError.map { $0 + "\n" } ?? ""
         if parsed.json {
-            return encode(
-                result,
-                code: 2,
-                stderr: "Route selected. Harness launch is not ported to the native core yet.\n"
-            )
+            return encode(result, code: resultCode, stderr: stderr)
         }
-        let traceLine = recorded ? "Usage trace: recorded as waiting.\n" : "Usage trace: not recorded.\n"
+        let routeText = emittedRoute ? "" : humanExplanation(explanation)
+        let traceLine = recorded ? "Usage trace: recorded.\n" : "Usage trace: not recorded.\n"
+        let launchLine = "Launch: \(launchStatus).\n"
         return CLIResult(
-            code: 2,
-            stdout: humanExplanation(explanation) + traceLine,
-            stderr: "Route selected. Harness launch is not ported to the native core yet.\n"
+            code: resultCode,
+            stdout: routeText + traceLine + launchLine,
+            stderr: stderr
         )
     }
 
@@ -243,6 +306,7 @@ public enum AskWhyCommand {
         var executionPlace: ExecutionPlace?
         var candidateID: String?
         var cloudProfileReference: String?
+        var executableOverride: String?
         var prompt = ""
 
         init?(arguments: [String]) {
@@ -282,7 +346,7 @@ public enum AskWhyCommand {
             arguments: [String],
             index: inout Int
         ) -> (String, String)? {
-            let flags = ["--person", "--role", "--harness", "--engine", "--place", "--candidate", "--cloud-profile"]
+            let flags = ["--person", "--role", "--harness", "--engine", "--place", "--candidate", "--cloud-profile", "--executable"]
             for flag in flags {
                 if argument == flag {
                     guard index + 1 < arguments.count else { return nil }
@@ -320,6 +384,8 @@ public enum AskWhyCommand {
                 candidateID = value
             case "--cloud-profile":
                 cloudProfileReference = value
+            case "--executable":
+                executableOverride = value
             default:
                 return false
             }

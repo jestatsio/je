@@ -75,18 +75,18 @@ final class AskWhyAssignmentRegistryTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: ledgerURL.path))
     }
 
-    func testAskRecordsWaitingTraceOnceAndNeverStoresPrompt() throws {
+    func testAskRecordsFailedTraceOnceAndNeverStoresPrompt() throws {
         try writeRegistry(records: [record(id: "fast-codex", status: "qualified")])
         let arguments = ["ask", "--person", "alice", "--role", "fast", "--json", "--", promptCanary]
         let first = run(arguments)
         XCTAssertEqual(first.code, 2)
-        XCTAssertTrue(first.stderr.contains("Harness launch is not ported"))
+        XCTAssertFalse(first.stderr.isEmpty)
         XCTAssertTrue(first.stdout.contains("\"usageTraceRecorded\" : true"))
         XCTAssertFalse((first.stdout + first.stderr).contains(promptCanary))
 
         let text = try String(contentsOf: ledgerURL, encoding: .utf8)
         XCTAssertEqual(text.split(separator: "\n").count, 1)
-        XCTAssertTrue(text.contains("\"outcome\":\"waiting\""))
+        XCTAssertTrue(text.contains("\"outcome\":\"failed\""))
         XCTAssertFalse(text.contains(promptCanary))
         XCTAssertEqual(try permissions(of: ledgerURL), 0o600)
         XCTAssertEqual(try permissions(of: ledgerURL.deletingLastPathComponent()), 0o700)

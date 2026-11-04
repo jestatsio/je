@@ -1,5 +1,7 @@
 import Foundation
 
+public typealias CLIOutputSink = @Sendable (String) -> Void
+
 public struct CLIResult: Equatable, Sendable {
     public let code: Int32
     public let stdout: String
@@ -23,7 +25,9 @@ public enum JECommandLine {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         recordedDay: String? = nil,
         runID: String? = nil,
-        secretStore: SecretStoring? = nil
+        secretStore: SecretStoring? = nil,
+        harnessRunner: HarnessRunning? = nil,
+        stdoutSink: CLIOutputSink? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -76,7 +80,10 @@ public enum JECommandLine {
                 ),
                 environment: environment,
                 recordedDay: recordedDay,
-                runID: runID
+                runID: runID,
+                secretStore: secretStore,
+                harnessRunner: harnessRunner,
+                stdoutSink: stdoutSink
             )
         case "profile":
             return ProfileCommands.run(
@@ -289,7 +296,7 @@ public enum JECommandLine {
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
       why [flags] [--] PROMPT  Explain the selected qualified route without running it
-      ask [flags] -- PROMPT    Select and show a route, then stop before unported launch
+      ask [flags] -- PROMPT    Select a route and launch its supported harness
 
     Other released Python commands are not ported yet. Host administration stays
     outside the user artifact.

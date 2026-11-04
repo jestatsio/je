@@ -38,18 +38,18 @@ foundation slice, not a claim that the launch platform is complete.
 - A private assignment registry that builds routing candidates only for cells
   in the launch support matrix. The user artifact can author personal-machine
   assignments with `je assignments`. Studio publication stays host-only.
-- `je why` route explanations and a first `je ask` route selection path. Ask
-  records a content-free waiting usage trace, then stops before launch because
-  harness launch is not ported yet.
+- `je why` route explanations and `je ask` harness launch for selected
+  personal-machine Codex and Claude Code assignments whose connection profile
+  matches. Ask records a content-free completed or failed usage trace.
 
 ## What this slice does not contain
 
 - Memory and native Ollama profile writes and checks, gateway catalog-bound
   profile writes, native Ollama launch, connect, run, doctor, export, or
   credential commands.
-- Harness launch, engine lifecycle, broker traffic, memory sync, history
-  storage, credential migration, or remote access. `je ask` therefore selects
-  and records a route but does not run the task yet.
+- Muse and built-in launch, catalog-bound Codex launch, engine lifecycle,
+  broker traffic, memory sync, history storage, credential migration, or
+  remote access. Unsupported launch cells fail closed after route display.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
   until recorded qualification evidence exists.
 
