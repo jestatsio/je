@@ -1,39 +1,130 @@
-# je
+<p align="center">
+  <img src="docs/assets/favicon.svg" alt="je" width="72" height="72">
+</p>
 
-Your tools. Your context. Your Studio.
+<h1 align="center">je</h1>
 
-The public client, native agent plugins, and documentation for J&E Studio.
+<p align="center"><strong>Your tools. Your context. Your Studio.</strong></p>
+
+<p align="center">
+  The local-first command line for your AI work.<br>
+  Keep the harnesses you know. Bring your own models and memory.
+</p>
+
+<p align="center">
+  <a href="https://jestatsio.github.io/je/">Documentation</a> ·
+  <a href="https://github.com/jestatsio/je/releases">Releases</a> ·
+  <a href="ROADMAP.md">Roadmap and open decisions</a> ·
+  <a href="https://github.com/jestatsio/je/issues">Issues</a>
+</p>
+
+---
+
+`je` connects the AI tools already on your machine to models you choose. It saves each connection as a named profile, checks it without spending inference, and opens your harness with that connection for one session. Codex, Claude Code, and the native Ollama CLI work today. Your files, instructions, and approval settings stay exactly where they were.
+
+The direction from here is local-first. A capable machine on your desk should carry most of the daily work, with cloud models one explicit choice away and never a silent fallback. The [roadmap](ROADMAP.md) records what is settled, what is still open, and the order we plan to build it.
 
 ## Install
 
-On an Apple Silicon Mac with Homebrew installed, run the following command.
+You need an Apple silicon Mac with Homebrew. The packaged user client carries its own runtime, so you do not need Python or a source checkout.
 
 ```sh
 brew install jestatsio/tap/je
 je setup
 ```
 
-The client includes its runtime. You do not need Python or a source checkout. Setup detects installed Codex and Claude Code CLIs and asks before adding their native je plugins. Install the clients themselves separately.
+Setup finds your installed Codex and Claude Code CLIs and asks before adding the native je plugin to each one. Install those clients separately. Setup changes no model settings and attaches no memory.
 
-[Read the documentation](https://jestatsio.github.io/je/) · [Download a release](https://github.com/jestatsio/je/releases) · [Report an issue](https://github.com/jestatsio/je/issues)
+## Quickstart
+
+Ask your Studio operator for an endpoint, a permitted model name, and a personal key. Then save the connection once and reuse it by name.
+
+```sh
+# Save a connection. The key prompt stays private in your terminal.
+je profile add studio \
+  --endpoint https://models.example.test \
+  --model YOUR_MODEL_NAME
+
+# Check it. This verifies access without generating a response.
+je doctor --profile studio
+
+# Work. Run this inside the project you want the harness to see.
+je connect claude --profile studio
+```
+
+Codex uses the same shape with its own tested route and reviewed model catalog. The [documentation](https://jestatsio.github.io/je/) walks through both, plus native Ollama and optional shared memory.
+
+## What je does today
+
+| Command | What it does |
+| --- | --- |
+| `je setup` | Detects installed clients and offers the native je plugin for each. |
+| `je profile` | Saves and inspects named model connections. Keys never print. |
+| `je doctor` | Checks authentication and model availability, with an opt-in live probe. |
+| `je connect` | Opens Codex or Claude Code on a saved connection for one session. |
+| `je memory` | Manages a separate personal memory connection, attached only on request. |
+| `je ollama` | Runs the native Ollama CLI through its own connection and a temporary local relay. |
+| `je run` | Hands a saved connection to any other OpenAI-compatible client. |
+| `je export` | Writes desktop and editor setup files for review, without applying them. |
+| `je workspace` (Studio host installation only) | Operates host-owned Coder and Lima workspaces. It is not part of the standalone user build above. |
+
+Run `je --help`, or add `--help` to any command, for the options in your build. The roadmap settles this split for the next stage. Trusted users install only the user `je`. The operator host build stays on the Studio.
+
+## How a session flows
+
+```text
+you ── je connect claude --profile studio ──▶ Claude Code
+                                               your files · your approvals
+                                                      │ model calls
+                                                      ▼
+                                          your model service
+                                          local today · cloud by choice
+
+shared memory attaches only when you add --memory-profile
+```
+
+je checks the connection first, then hands the harness temporary session settings. Your saved defaults stay untouched. If an existing sign-in conflicts with the route, the launch stops and says why instead of guessing.
+
+## Design principles
+
+- **Explicit connections.** Today you choose the profile for every session. As the front door lands through `je ask`, layered policy resolves the route and je shows the person and profile, the chosen harness, model, and route, any attached memory, and where the work will run before anything starts. Explicit flags can override a soft preference, never a hard permission or privacy constraint. Installing je switches nothing on its own.
+- **Local first, cloud by choice.** A local route never falls back to a cloud model silently. People can configure their own cloud profiles, defaults, and escalation targets ahead of time, so a wanted cloud run or an approved escalation stays one explicit step.
+- **Credentials stay out of view.** Keys are prompted privately, stored in owner-only files, and never printed or passed as command arguments.
+- **The harness stays in charge.** Native instructions, tools, history, and approval settings keep working as they did before je arrived.
+- **Check before inference.** The default checks prove access and model availability without generating anything. A listed model still has to earn its place through real task trials.
+
+## Where je is going
+
+The next stage turns je from a connection launcher into the front door for local AI work. That identity is now settled, and it is being built for the small trusted Studio group from day one. You run `je ask "..."`, layered policy resolves the initial route, je shows that route and why, and a local model does the work in a harness you already trust, on your own machine or in your Studio workspace. Cloud models stay available through each person's configured profiles and defaults for the jobs that need them. One codebase will ship that user front door separately from the operator host build on the Studio. The current release still works as the explicit launcher described above.
+
+The details are being decided in the open, one question at a time. [ROADMAP.md](ROADMAP.md) holds the settled calls, the remaining open questions, and a provisional build order for the Mac Studio arriving in December 2026. It also covers routing, model roles and inference engines, qualification, background jobs, shared memory and its bounded offline cache, Keychain storage, and the path to publishing the source.
+
+## This repository
+
+| Path | What it holds |
+| --- | --- |
+| [docs/](docs/) | The documentation site published at jestatsio.github.io/je. |
+| [plugins/je/](plugins/je/) | The shared connection, status, and memory skills for Codex and Claude Code. |
+| [ROADMAP.md](ROADMAP.md) | The product direction, settled decisions, and open questions. |
+| [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with third-party notices and SHA-256 checksums. |
+
+The application source is maintained privately today. The public roadmap records the plan to change that, starting with the client.
 
 ## Service access
 
-Installing je does not grant access to a model or memory service. Get an endpoint, model name, and personal key from your Studio operator. The hosted Studio service is a private pilot.
+Installing je grants no access to a model or memory service. Your Studio operator provides the endpoint, the permitted model names, and your personal keys. The hosted Studio service is a private pilot for a small trusted group.
 
-The plugin provides instructions for using je. It does not contain credentials, switch models, attach memory, or install hooks. Connections remain explicit and each client keeps its approval controls.
+The plugins carry guidance only. They hold no credentials, switch no models, attach no memory, and install no hooks.
 
-## Update
+## Update and removal
 
 ```sh
 brew update
 brew upgrade jestatsio/tap/je
 ```
 
-The agent plugins are separate installations. Use each client's native plugin manager to update them. Run `je setup --remove` to remove the je plugins with confirmation, then `brew uninstall je` to remove the client. Saved profiles remain on disk.
+Those commands update the user client. Update the agent plugins through each client and its native plugin manager. The operator host installation on the Studio updates separately through its host install path, so a user upgrade never changes Studio services or workspace controls. To leave cleanly, run `je setup --remove` with confirmation, then `brew uninstall je`. Saved profiles remain on disk, and removing a local profile or the user client never revokes the server credential behind it.
 
-## What this repository contains
+---
 
-This repository holds the documentation, plugin manifests and skills, and downloadable client releases. The application source is maintained privately. Release archives include required third-party license notices and their SHA-256 checksums.
-
-Built by [J&E Stats](https://jestats.io).
+<p align="center">Built by <a href="https://jestats.io">J&amp;E Stats</a> · Your tools. Your context. Your Studio.</p>
