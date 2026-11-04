@@ -586,6 +586,32 @@ public struct ProfileStore: Sendable {
         _ = try checkPrivateDirectory(url)
     }
 
+    static func readCatalogData(at url: URL, limit: Int = 2 * 1024 * 1024) throws -> Data {
+        let probe = ProfileStore(directory: URL(fileURLWithPath: "/"))
+        guard let info = probe.statInfo(url) else {
+            throw StateStoreError("The Codex catalog could not be read; no session was started.")
+        }
+        guard probe.isRegularFile(info),
+              !probe.isSymbolicLink(info),
+              probe.permissions(info) & 0o022 == 0,
+              probe.owner(info) == probe.currentUID() else {
+            throw StateStoreError("Catalogs must be regular files owned by you without group or world write access.")
+        }
+        do {
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            let data = try handle.read(upToCount: limit + 1) ?? Data()
+            if data.count > limit {
+                throw StateStoreError("The Codex catalog exceeds the supported size.")
+            }
+            return data
+        } catch let error as StateStoreError {
+            throw error
+        } catch {
+            throw StateStoreError("The Codex catalog could not be read; no session was started.")
+        }
+    }
+
     func readPrivateData(_ url: URL, limit: Int = 64 * 1024) throws -> Data {
         guard let info = statInfo(url) else {
             throw StateStoreError("The requested private file does not exist.")

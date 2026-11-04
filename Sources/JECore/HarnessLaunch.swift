@@ -36,6 +36,8 @@ public enum HarnessLaunchError: Error, Equatable, Sendable {
     case modelMismatch
     case executableUnavailable
     case catalogLaunchNotPorted
+    case catalogInvalid(String)
+    case catalogVersionMismatch
     case secretInArguments
     case authenticationFailed
     case preparationFailed
@@ -55,6 +57,10 @@ public enum HarnessLaunchError: Error, Equatable, Sendable {
             return "The selected harness executable is unavailable."
         case .catalogLaunchNotPorted:
             return "Catalog-bound Codex launch is not ported to the native core yet."
+        case .catalogInvalid(let message):
+            return message
+        case .catalogVersionMismatch:
+            return "The installed Codex version does not match the saved catalog binding."
         case .secretInArguments:
             return "The saved connection key cannot appear in the prompt or harness arguments."
         case .authenticationFailed:
@@ -143,44 +149,97 @@ public struct HarnessLaunchPreparer: Sendable {
         environment: [String: String],
         executableOverride: String?
     ) throws -> PreparedHarnessLaunch {
-        guard profile.codexCatalog == nil else {
-            throw HarnessLaunchError.catalogLaunchNotPorted
-        }
         let executable = try resolveExecutable(
             override: executableOverride,
             defaultName: "codex",
             environment: environment
         )
-        var arguments = [
-            "-c", "model=" + jsonString(profile.model),
-            "-c", "model_provider=\"je_studio\"",
-            "-c", "model_providers.je_studio.name=\"JE Studio\"",
-            "-c", "model_providers.je_studio.base_url=" + jsonString(profile.apiBase),
-            "-c", "model_providers.je_studio.env_key=\"JE_STUDIO_API_KEY\"",
-            "-c", "model_providers.je_studio.wire_api=\"responses\"",
-            "-c", "model_providers.je_studio.supports_websockets=false"
-        ]
-        if let context = profile.contextWindow {
-            arguments.append(contentsOf: ["-c", "model_context_window=\(context)"])
+        var temporaryDirectories: [URL] = []
+        do {
+            var arguments = [
+                "-c", "model=" + jsonString(profile.model),
+                "-c", "model_provider=\"je_studio\"",
+                "-c", "model_providers.je_studio.name=\"JE Studio\"",
+                "-c", "model_providers.je_studio.base_url=" + jsonString(profile.apiBase),
+                "-c", "model_providers.je_studio.env_key=\"JE_STUDIO_API_KEY\"",
+                "-c", "model_providers.je_studio.wire_api=\"responses\"",
+                "-c", "model_providers.je_studio.supports_websockets=false"
+            ]
+            if let context = profile.contextWindow {
+                arguments.append(contentsOf: ["-c", "model_context_window=\(context)"])
+            }
+            if let binding = profile.codexCatalog {
+                do {
+                    try CodexCatalogLoader.checkVersion(
+                        executable: executable,
+                        requiredVersion: binding.requiredVersion,
+                        environment: environment,
+                        secret: profile.secret
+                    )
+                    let raw = try CodexCatalogLoader.loadSnapshot(
+                        binding: binding,
+                        model: profile.model,
+                        contextWindow: profile.contextWindow,
+                        secret: profile.secret
+                    )
+                    let temporary = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(
+                            "je-codex-" + UUID().uuidString.lowercased(),
+                            isDirectory: true
+                        )
+                    try FileManager.default.createDirectory(
+                        at: temporary,
+                        withIntermediateDirectories: false,
+                        attributes: [.posixPermissions: 0o700]
+                    )
+                    temporaryDirectories.append(temporary)
+                    let snapshot = temporary.appendingPathComponent("catalog.json")
+                    guard !snapshot.path.contains(profile.secret),
+                          FileManager.default.createFile(
+                            atPath: snapshot.path,
+                            contents: raw,
+                            attributes: [.posixPermissions: 0o600]
+                          ) else {
+                        throw HarnessLaunchError.preparationFailed
+                    }
+                    arguments.append(contentsOf: [
+                        "-c", "model_catalog_json=" + jsonString(snapshot.path)
+                    ])
+                } catch let error as CodexCatalogError {
+                    switch error {
+                    case .versionMismatch:
+                        throw HarnessLaunchError.catalogVersionMismatch
+                    case .versionUnavailable:
+                        throw HarnessLaunchError.catalogInvalid(error.message)
+                    case .invalid(let message):
+                        throw HarnessLaunchError.catalogInvalid(message)
+                    }
+                }
+            }
+            switch candidate.launchMode {
+            case .headless:
+                arguments.append(contentsOf: ["exec", "--json", prompt])
+            case .interactive:
+                arguments.append(prompt)
+            case .singleStep:
+                throw HarnessLaunchError.unsupportedHarness
+            }
+            var childEnvironment = environment
+            childEnvironment.removeValue(forKey: "JE_GATEWAY_API_KEY")
+            childEnvironment["JE_STUDIO_API_KEY"] = profile.secret
+            let spec = HarnessLaunchSpec(
+                executableURL: executable,
+                arguments: arguments,
+                environment: childEnvironment
+            )
+            try validateNoSecretInArguments(spec, secret: profile.secret)
+            return PreparedHarnessLaunch(spec: spec, temporaryDirectories: temporaryDirectories)
+        } catch {
+            for directory in temporaryDirectories {
+                try? FileManager.default.removeItem(at: directory)
+            }
+            throw error
         }
-        switch candidate.launchMode {
-        case .headless:
-            arguments.append(contentsOf: ["exec", "--json", prompt])
-        case .interactive:
-            arguments.append(prompt)
-        case .singleStep:
-            throw HarnessLaunchError.unsupportedHarness
-        }
-        var childEnvironment = environment
-        childEnvironment.removeValue(forKey: "JE_GATEWAY_API_KEY")
-        childEnvironment["JE_STUDIO_API_KEY"] = profile.secret
-        let spec = HarnessLaunchSpec(
-            executableURL: executable,
-            arguments: arguments,
-            environment: childEnvironment
-        )
-        try validateNoSecretInArguments(spec, secret: profile.secret)
-        return PreparedHarnessLaunch(spec: spec)
     }
 
     private func prepareClaude(

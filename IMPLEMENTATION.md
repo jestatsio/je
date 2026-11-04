@@ -40,16 +40,19 @@ foundation slice, not a claim that the launch platform is complete.
   assignments with `je assignments`. Studio publication stays host-only.
 - `je why` route explanations and `je ask` harness launch for selected
   personal-machine Codex and Claude Code assignments whose connection profile
-  matches. Ask records a content-free completed or failed usage trace.
+  matches. Catalog-bound Codex requires an exact version check, digest check,
+  catalog validation, and a private exact-byte snapshot. Ask records a
+  content-free completed or failed usage trace.
 
 ## What this slice does not contain
 
 - Memory and native Ollama profile writes and checks, gateway catalog-bound
   profile writes, native Ollama launch, connect, run, doctor, export, or
   credential commands.
-- Muse and built-in launch, catalog-bound Codex launch, engine lifecycle,
-  broker traffic, memory sync, history storage, credential migration, or
-  remote access. Unsupported launch cells fail closed after route display.
+- Muse and built-in launch, gateway catalog-bound profile authoring, engine
+  lifecycle, broker traffic, memory sync, history storage, credential
+  migration, or remote access. Unsupported launch cells fail closed after
+  route display.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
   until recorded qualification evidence exists.
 

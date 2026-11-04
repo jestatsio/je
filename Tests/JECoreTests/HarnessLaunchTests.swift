@@ -103,7 +103,7 @@ final class HarnessLaunchTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: settingsDirectory.path))
     }
 
-    func testUnsupportedAndCatalogBoundRoutesFailClosed() throws {
+    func testUnsupportedRoutesFailClosed() throws {
         let executable = try writeExecutable(name: "codex")
         XCTAssertThrowsError(try HarnessLaunchPreparer().prepare(
             candidate: candidate(harness: .muse, mode: .interactive),
@@ -113,21 +113,6 @@ final class HarnessLaunchTests: XCTestCase {
             executableOverride: executable.path
         )) { error in
             XCTAssertEqual(error as? HarnessLaunchError, .unsupportedHarness)
-        }
-
-        let catalog = CodexCatalogBinding(
-            path: "/tmp/catalog.json",
-            requiredVersion: "0.166.0",
-            sha256: String(repeating: "0", count: 64)
-        )
-        XCTAssertThrowsError(try HarnessLaunchPreparer().prepare(
-            candidate: candidate(harness: .codex, mode: .headless),
-            profile: resolvedProfile(catalog: catalog),
-            prompt: prompt,
-            environment: ["PATH": temporary.path],
-            executableOverride: executable.path
-        )) { error in
-            XCTAssertEqual(error as? HarnessLaunchError, .catalogLaunchNotPorted)
         }
     }
 

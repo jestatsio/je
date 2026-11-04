@@ -170,6 +170,10 @@ public enum AskWhyCommand {
                 launchStatus = "connection_profile_required"
             case .executableUnavailable:
                 launchStatus = "executable_unavailable"
+            case .catalogInvalid(_):
+                launchStatus = "catalog_invalid"
+            case .catalogVersionMismatch:
+                launchStatus = "catalog_version_mismatch"
             default:
                 launchStatus = "failed"
             }
