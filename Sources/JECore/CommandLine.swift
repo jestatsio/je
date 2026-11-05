@@ -28,7 +28,8 @@ public enum JECommandLine {
         secretStore: SecretStoring? = nil,
         harnessRunner: HarnessRunning? = nil,
         stdoutSink: CLIOutputSink? = nil,
-        musePhysicalMemoryBytes: UInt64? = nil
+        musePhysicalMemoryBytes: UInt64? = nil,
+        ollamaTransport: OllamaHTTPTransport? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -119,7 +120,8 @@ public enum JECommandLine {
                 arguments: remaining,
                 explicitStateDirectory: explicitStateDirectory,
                 environment: environment,
-                secretStore: secretStore
+                secretStore: secretStore,
+                ollamaTransport: ollamaTransport
             )
         case "workspace":
             return CLIResult(
@@ -245,26 +247,131 @@ public enum JECommandLine {
         arguments: [String],
         explicitStateDirectory: String?,
         environment: [String: String],
-        secretStore: SecretStoring?
+        secretStore: SecretStoring?,
+        ollamaTransport: OllamaHTTPTransport?
     ) -> CLIResult {
-        guard arguments.count >= 3, arguments[1] == "profile" else {
-            if arguments.first == "ollama" {
-                return CLIResult(
-                    code: 2,
-                    stderr: "Native Ollama launch and checks are not ported to the native core yet. Use the released Python client for now.\n"
-                )
-            }
+        let directory = stateDirectory(
+            explicit: explicitStateDirectory,
+            environment: environment
+        )
+        if arguments.count >= 2, arguments[1] == "profile" {
+            return ProfileCommands.runOllamaProfile(
+                arguments: arguments,
+                stateDirectory: directory,
+                environment: environment,
+                secretStore: secretStore
+            )
+        }
+        guard arguments.first == "ollama" else { return invalid() }
+        guard let parsed = OllamaTopLevelArguments(arguments: Array(arguments.dropFirst())) else {
             return invalid()
         }
-        return ProfileCommands.runOllamaProfile(
-            arguments: arguments,
-            stateDirectory: stateDirectory(
-                explicit: explicitStateDirectory,
-                environment: environment
-            ),
-            environment: environment,
-            secretStore: secretStore
-        )
+        guard !parsed.hadSeparator, parsed.positionals == ["check"] else {
+            return CLIResult(
+                code: 2,
+                stderr: "Native Ollama launch is not ported to the native core yet. Use the released Python client for now.\n"
+            )
+        }
+        if parsed.executable != nil {
+            return CLIResult(
+                code: 2,
+                stderr: "The native connection check does not launch an executable.\n"
+            )
+        }
+        guard let profileName = parsed.profile else {
+            return CLIResult(
+                code: 2,
+                stderr: "Select a saved native Ollama connection with --profile.\n"
+            )
+        }
+        do {
+            let profile = try ProfileStore(directory: directory).loadResolvedOllamaProfile(
+                name: profileName,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+            let report = try OllamaConnectionChecker.check(
+                profile: profile,
+                transport: ollamaTransport ?? URLSessionOllamaHTTPTransport()
+            )
+            if report.passed {
+                return CLIResult(
+                    code: 0,
+                    stdout: "Connected. Native model \(profile.model) is available.\n"
+                )
+            }
+            return CLIResult(
+                code: 1,
+                stderr: "Connected, but the default native model is not available to this key.\n"
+            )
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch let error as OllamaCheckError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The native Ollama connection could not be checked.\n")
+        }
+    }
+
+    private struct OllamaTopLevelArguments {
+        let profile: String?
+        let executable: String?
+        let positionals: [String]
+        let hadSeparator: Bool
+
+        init?(arguments: [String]) {
+            var profile: String?
+            var executable: String?
+            var positionals: [String] = []
+            var hadSeparator = false
+            var index = 0
+            while index < arguments.count {
+                let argument = arguments[index]
+                if argument == "--" {
+                    hadSeparator = true
+                    positionals.append(contentsOf: arguments.dropFirst(index + 1))
+                    break
+                }
+                if argument == "--profile" || argument.hasPrefix("--profile=") {
+                    guard profile == nil,
+                          let value = Self.value(argument: argument, flag: "--profile", arguments: arguments, index: &index),
+                          !value.isEmpty else { return nil }
+                    profile = value
+                    continue
+                }
+                if argument == "--executable" || argument.hasPrefix("--executable=") {
+                    guard executable == nil,
+                          let value = Self.value(argument: argument, flag: "--executable", arguments: arguments, index: &index),
+                          !value.isEmpty else { return nil }
+                    executable = value
+                    continue
+                }
+                if argument.hasPrefix("-") {
+                    return nil
+                }
+                positionals.append(argument)
+                index += 1
+            }
+            self.profile = profile
+            self.executable = executable
+            self.positionals = positionals
+            self.hadSeparator = hadSeparator
+        }
+
+        private static func value(
+            argument: String,
+            flag: String,
+            arguments: [String],
+            index: inout Int
+        ) -> String? {
+            if argument == flag {
+                guard index + 1 < arguments.count else { return nil }
+                let value = arguments[index + 1]
+                index += 2
+                return value
+            }
+            index += 1
+            return String(argument.dropFirst(flag.count + 1))
+        }
     }
 
     private static func stateDirectory(
@@ -320,6 +427,7 @@ public enum JECommandLine {
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
       ollama profile add NAME  Save a native Ollama connection with a secret reference
+      ollama --profile N check Check a native Ollama key and default model without inference
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
       assignments qualify ID   Run and store one bounded qualification task
