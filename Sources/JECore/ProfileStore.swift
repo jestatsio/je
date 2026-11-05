@@ -169,7 +169,7 @@ public struct ProfileStore: Sendable {
                 throw StateStoreError("Keep gateway credentials out of public profile fields.")
             }
             if let binding = profile.codexCatalog {
-                try validateCatalog(binding, secret: secret)
+                try Self.validateCatalogBinding(binding, secret: secret)
             }
         } else {
             throw StateStoreError("The connection profile is invalid; no contents were displayed.")
@@ -190,6 +190,7 @@ public struct ProfileStore: Sendable {
         secret: String,
         model: String,
         contextWindow: Int?,
+        codexCatalog: CodexCatalogBinding? = nil,
         secretStore: SecretStoring,
         replace: Bool = false
     ) throws {
@@ -202,6 +203,19 @@ public struct ProfileStore: Sendable {
         }
         if name.contains(secret) || endpoint.contains(secret) || model.contains(secret) {
             throw StateStoreError("Keep gateway credentials out of public profile fields.")
+        }
+        if let codexCatalog {
+            try Self.validateCatalogBinding(codexCatalog, secret: secret)
+            do {
+                _ = try CodexCatalogLoader.loadSnapshot(
+                    binding: codexCatalog,
+                    model: model,
+                    contextWindow: contextWindow,
+                    secret: secret
+                )
+            } catch let error as CodexCatalogError {
+                throw StateStoreError(error.message)
+            }
         }
         let folder = try ensureFolder(named: "profiles")
         let path = folder.appendingPathComponent(name + ".json")
@@ -229,7 +243,7 @@ public struct ProfileStore: Sendable {
             secretReference: reference,
             model: model,
             contextWindow: contextWindow,
-            codexCatalog: nil
+            codexCatalog: codexCatalog
         )
         do {
             let encoder = JSONEncoder()
@@ -459,7 +473,7 @@ public struct ProfileStore: Sendable {
                     throw StateStoreError("Keep gateway credentials out of public profile fields.")
                 }
                 if let binding {
-                    try validateCatalog(binding, secret: secret)
+                    try Self.validateCatalogBinding(binding, secret: secret)
                 }
             }
             return LegacyProfile(
@@ -733,7 +747,7 @@ public struct ProfileStore: Sendable {
         return CodexCatalogBinding(path: path, requiredVersion: version, sha256: sha)
     }
 
-    private func validateCatalog(_ binding: CodexCatalogBinding, secret: String) throws {
+    static func validateCatalogBinding(_ binding: CodexCatalogBinding, secret: String) throws {
         let path = binding.path
         let components = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
         guard path.hasPrefix("/"), !components.contains(".."), !containsControl(path) else {
@@ -751,13 +765,13 @@ public struct ProfileStore: Sendable {
         }
     }
 
-    private func isVersion(_ value: String) -> Bool {
+    private static func isVersion(_ value: String) -> Bool {
         let pattern = #"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z.-]+)?$"#
         return value.range(of: pattern, options: .regularExpression) != nil
     }
 
     private func validateSecret(_ secret: String) throws {
-        guard !secret.isEmpty, !secret.contains(where: { $0.isWhitespace }), !containsControl(secret) else {
+        guard !secret.isEmpty, !secret.contains(where: { $0.isWhitespace }), !Self.containsControl(secret) else {
             throw StateStoreError("A nonempty gateway credential without whitespace is required.")
         }
     }
@@ -766,19 +780,19 @@ public struct ProfileStore: Sendable {
         guard !model.isEmpty,
               model.trimmingCharacters(in: .whitespacesAndNewlines) == model,
               !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !containsControl(model) else {
+              !Self.containsControl(model) else {
             throw StateStoreError("A nonempty model name without control characters is required.")
         }
     }
 
-    private func containsControl(_ value: String) -> Bool {
+    private static func containsControl(_ value: String) -> Bool {
         value.unicodeScalars.contains { $0.value < 32 || $0.value == 127 }
     }
 
     private func normalizedEndpoint(_ endpoint: String) throws -> String {
         guard !endpoint.isEmpty,
               endpoint.trimmingCharacters(in: .whitespacesAndNewlines) == endpoint,
-              !containsControl(endpoint),
+              !Self.containsControl(endpoint),
               !endpoint.contains("?"),
               !endpoint.contains("#"),
               var components = URLComponents(string: endpoint),

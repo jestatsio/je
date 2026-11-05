@@ -18,6 +18,43 @@ public enum CodexCatalogError: Error, Equatable, Sendable {
 }
 
 public enum CodexCatalogLoader {
+    public static func bind(
+        path: String,
+        requiredVersion: String,
+        model: String,
+        contextWindow: Int?,
+        secret: String
+    ) throws -> CodexCatalogBinding {
+        var binding = CodexCatalogBinding(
+            path: path,
+            requiredVersion: requiredVersion,
+            sha256: String(repeating: "0", count: 64)
+        )
+        do {
+            try ProfileStore.validateCatalogBinding(binding, secret: secret)
+        } catch let error as StateStoreError {
+            throw CodexCatalogError.invalid(error.message)
+        }
+        let raw: Data
+        do {
+            raw = try ProfileStore.readCatalogData(at: URL(fileURLWithPath: path))
+        } catch let error as StateStoreError {
+            throw CodexCatalogError.invalid(error.message)
+        }
+        try validate(raw: raw, model: model, contextWindow: contextWindow, secret: secret)
+        binding = CodexCatalogBinding(
+            path: path,
+            requiredVersion: requiredVersion,
+            sha256: SHA256.hexDigest(raw)
+        )
+        do {
+            try ProfileStore.validateCatalogBinding(binding, secret: secret)
+        } catch let error as StateStoreError {
+            throw CodexCatalogError.invalid(error.message)
+        }
+        return binding
+    }
+
     public static func loadSnapshot(
         binding: CodexCatalogBinding,
         model: String,

@@ -58,10 +58,10 @@ public enum ProfileCommands {
         guard let parsed = AddArguments(arguments: Array(arguments.dropFirst(2))) else {
             return invalid()
         }
-        if parsed.hasCatalogOptions {
+        if (parsed.codexCatalog == nil) != (parsed.codexVersion == nil) {
             return CLIResult(
                 code: 2,
-                stderr: "Codex catalog binding is not ported to native profile writes yet.\n"
+                stderr: "Provide --codex-catalog and --codex-version together.\n"
             )
         }
         let secret: String
@@ -75,12 +75,37 @@ public enum ProfileCommands {
                 stderr: "Provide --key-file or --key-env when input is not interactive.\n"
             )
         }
+        var binding: CodexCatalogBinding?
+        if let catalogPath = parsed.codexCatalog, let catalogVersion = parsed.codexVersion {
+            let expanded = (catalogPath as NSString).expandingTildeInPath
+            let absolutePath: String
+            if expanded.hasPrefix("/") {
+                absolutePath = URL(fileURLWithPath: expanded).standardizedFileURL.path
+            } else {
+                absolutePath = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                    .appendingPathComponent(expanded)
+                    .standardizedFileURL
+                    .path
+            }
+            do {
+                binding = try CodexCatalogLoader.bind(
+                    path: absolutePath,
+                    requiredVersion: catalogVersion,
+                    model: parsed.model,
+                    contextWindow: parsed.contextWindow,
+                    secret: secret
+                )
+            } catch let error as CodexCatalogError {
+                throw StateStoreError(error.message)
+            }
+        }
         try store.saveNativeProfile(
             name: parsed.name,
             endpoint: parsed.endpoint,
             secret: secret,
             model: parsed.model,
             contextWindow: parsed.contextWindow,
+            codexCatalog: binding,
             secretStore: secretStore,
             replace: parsed.replace
         )
@@ -129,8 +154,9 @@ public enum ProfileCommands {
         let contextWindow: Int?
         let keyFile: String?
         let keyEnvironment: String?
+        let codexCatalog: String?
+        let codexVersion: String?
         let replace: Bool
-        let hasCatalogOptions: Bool
 
         init?(arguments: [String]) {
             guard let name = arguments.first, !name.hasPrefix("-") else { return nil }
@@ -140,8 +166,9 @@ public enum ProfileCommands {
             var context: Int?
             var keyFile: String?
             var keyEnvironment: String?
+            var codexCatalog: String?
+            var codexVersion: String?
             var replace = false
-            var catalog = false
             var index = 1
             while index < arguments.count {
                 let argument = arguments[index]
@@ -168,8 +195,12 @@ public enum ProfileCommands {
                 case "--key-env":
                     guard keyFile == nil && keyEnvironment == nil else { return nil }
                     keyEnvironment = pair.1
-                case "--codex-catalog", "--codex-version":
-                    catalog = true
+                case "--codex-catalog":
+                    guard codexCatalog == nil else { return nil }
+                    codexCatalog = pair.1
+                case "--codex-version":
+                    guard codexVersion == nil else { return nil }
+                    codexVersion = pair.1
                 default:
                     return nil
                 }
@@ -180,8 +211,9 @@ public enum ProfileCommands {
             self.contextWindow = context
             self.keyFile = keyFile
             self.keyEnvironment = keyEnvironment
+            self.codexCatalog = codexCatalog
+            self.codexVersion = codexVersion
             self.replace = replace
-            self.hasCatalogOptions = catalog
         }
 
         private static func flagValue(

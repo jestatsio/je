@@ -127,7 +127,7 @@ final class ProfileStoreTests: XCTestCase {
         XCTAssertEqual(try store.listProfiles(), ["bob"])
     }
 
-    func testCatalogProfileAddStaysUnportedAndDoesNotEchoArguments() {
+    func testPartialCatalogProfileAddDoesNotEchoArguments() {
         let result = JECommandLine.run(
             ["--state-dir", stateDirectory.path, "profile", "add", "alice",
              "--endpoint", "https://models.example.test", "--model", "local-fast",
@@ -135,7 +135,9 @@ final class ProfileStoreTests: XCTestCase {
             environment: ["JE_TEST_KEY": secret]
         )
         XCTAssertEqual(result.code, 2)
-        XCTAssertTrue(result.stderr.contains("catalog binding is not ported"))
+        XCTAssertTrue(
+            result.stderr.contains("Provide --codex-catalog and --codex-version together.")
+        )
         XCTAssertFalse((result.stdout + result.stderr).contains(secret))
     }
 

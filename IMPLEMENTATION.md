@@ -27,8 +27,8 @@ foundation slice, not a claim that the launch platform is complete.
 - A user-artifact boundary model with a test that rejects host-only modules.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
 - Read-only memory and native Ollama profile parity, plus gateway profile list,
-  show, native schema 3 writes, and removal. Legacy schema 1 and 2 files keep
-  their strict private-file checks.
+  show, native schema 3 writes, catalog-bound writes, and removal. Legacy
+  schema 1 and 2 files keep their strict private-file checks.
 - A deterministic routing policy core with hard filters, settled preference
   layers, explicit cloud authorization, replayable filter results, and traced
   advisory scores that do not change the starter route.
@@ -58,13 +58,11 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Memory and native Ollama profile writes and checks, gateway catalog-bound
-  profile writes, native Ollama launch, connect, run, doctor, export, or
-  credential commands.
-- Muse arbitrary local endpoints and built-in launch, gateway catalog-bound
-  profile authoring, engine lifecycle, broker traffic, memory sync, history
-  storage, credential migration, or remote access. Unsupported launch cells
-  fail closed after route display.
+- Memory and native Ollama profile writes and checks, native Ollama launch,
+  connect, run, doctor, export, or credential commands.
+- Muse arbitrary local endpoints and built-in launch, engine lifecycle,
+  broker traffic, memory sync, history storage, credential migration, or
+  remote access. Unsupported launch cells fail closed after route display.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
   until recorded qualification evidence exists.
 

@@ -48,6 +48,60 @@ final class ProfileWriteTests: XCTestCase {
         XCTAssertEqual(resolved.apiBase, "https://models.example.test/v1")
     }
 
+    func testAddWithCodexCatalogStoresExactDigestBindingOutsideSecret() throws {
+        let catalog = try writeCatalog(model: "local-fast", contextWindow: 32768)
+        let result = run(
+            catalogAddArguments(catalog: catalog.url, version: "0.166.0")
+        )
+        XCTAssertEqual(result.code, 0, result.stderr)
+        XCTAssertFalse((result.stdout + result.stderr).contains(secret))
+
+        let rawProfile = try String(contentsOf: profileURL, encoding: .utf8)
+        XCTAssertTrue(rawProfile.contains("\"schema_version\" : 3"))
+        XCTAssertTrue(rawProfile.contains("codex_catalog"))
+        XCTAssertTrue(rawProfile.contains(SHA256.hexDigest(catalog.data)))
+        XCTAssertFalse(rawProfile.contains(secret))
+        XCTAssertEqual(fakeSecrets.count, 1)
+
+        let store = ProfileStore(directory: stateDirectory)
+        let publicProfile = try store.loadPublicProfile(name: "alice")
+        XCTAssertEqual(publicProfile.codexCatalog?.path, catalog.url.path)
+        XCTAssertEqual(publicProfile.codexCatalog?.requiredVersion, "0.166.0")
+        XCTAssertEqual(publicProfile.codexCatalog?.sha256, SHA256.hexDigest(catalog.data))
+
+        let resolved = try store.loadResolvedProfile(name: "alice", secretStore: fakeSecrets)
+        let snapshot = try CodexCatalogLoader.loadSnapshot(
+            binding: try XCTUnwrap(resolved.codexCatalog),
+            model: resolved.model,
+            contextWindow: resolved.contextWindow,
+            secret: resolved.secret
+        )
+        XCTAssertEqual(snapshot, catalog.data)
+    }
+
+    func testAddWithConflictingCatalogSavesNeitherProfileNorSecret() throws {
+        let catalog = try writeCatalog(model: "other-model", contextWindow: 32768)
+        let result = run(
+            catalogAddArguments(catalog: catalog.url, version: "0.166.0")
+        )
+        XCTAssertEqual(result.code, 2)
+        XCTAssertTrue(result.stderr.contains("missing from the Codex catalog"))
+        XCTAssertFalse((result.stdout + result.stderr).contains(secret))
+        XCTAssertEqual(fakeSecrets.count, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: profileURL.path))
+    }
+
+    func testAddWithOnlyOneCatalogOptionDoesNotStoreSecret() {
+        let result = run(addArguments() + ["--codex-version", "0.166.0"])
+        XCTAssertEqual(result.code, 2)
+        XCTAssertTrue(
+            result.stderr.contains("Provide --codex-catalog and --codex-version together.")
+        )
+        XCTAssertFalse((result.stdout + result.stderr).contains(secret))
+        XCTAssertEqual(fakeSecrets.count, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: profileURL.path))
+    }
+
     func testAddFromPrivateKeyFile() throws {
         let keyFile = temporary.appendingPathComponent("key")
         try Data((secret + "\n").utf8).write(to: keyFile)
@@ -149,6 +203,25 @@ final class ProfileWriteTests: XCTestCase {
             "--context-window", "32768",
             "--key-env", "JE_TEST_KEY"
         ]
+    }
+
+    private func catalogAddArguments(catalog: URL, version: String) -> [String] {
+        addArguments() + [
+            "--codex-catalog", catalog.path,
+            "--codex-version", version
+        ]
+    }
+
+    private func writeCatalog(
+        model: String,
+        contextWindow: Int
+    ) throws -> (url: URL, data: Data) {
+        let json = "{\"models\":[{\"slug\":\"\(model)\",\"context_window\":\(contextWindow),\"max_context_window\":65536}]}"
+        let data = Data(json.utf8)
+        let url = temporary.appendingPathComponent("catalog.json")
+        try data.write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        return (url, data)
     }
 
     private func permissions(of url: URL) throws -> Int {
