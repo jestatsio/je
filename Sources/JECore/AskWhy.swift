@@ -27,7 +27,8 @@ public enum AskWhyCommand {
         runID: String?,
         secretStore: SecretStoring? = nil,
         harnessRunner: HarnessRunning? = nil,
-        stdoutSink: CLIOutputSink? = nil
+        stdoutSink: CLIOutputSink? = nil,
+        musePhysicalMemoryBytes: UInt64? = nil
     ) -> CLIResult {
         guard command == "why" || command == "ask" else {
             return invalid()
@@ -99,7 +100,8 @@ public enum AskWhyCommand {
             suppliedRunID: runID,
             secretStore: secretStore,
             harnessRunner: harnessRunner,
-            stdoutSink: stdoutSink
+            stdoutSink: stdoutSink,
+            musePhysicalMemoryBytes: musePhysicalMemoryBytes
         )
     }
 
@@ -112,7 +114,8 @@ public enum AskWhyCommand {
         suppliedRunID: String?,
         secretStore: SecretStoring?,
         harnessRunner: HarnessRunning?,
-        stdoutSink: CLIOutputSink?
+        stdoutSink: CLIOutputSink?,
+        musePhysicalMemoryBytes: UInt64?
     ) -> CLIResult {
         guard let candidate = explanation.selectedCandidate else {
             let result = AskResult(
@@ -140,19 +143,30 @@ public enum AskWhyCommand {
         var emittedRoute = false
 
         do {
-            guard let profileName = candidate.connectionProfileName else {
-                throw HarnessLaunchError.connectionProfileRequired
+            let prepared: PreparedHarnessLaunch
+            if HarnessLaunchPreparer.isMuseLocal(candidate) {
+                prepared = try HarnessLaunchPreparer().prepareMuseLocal(
+                    candidate: candidate,
+                    prompt: parsed.prompt,
+                    environment: environment,
+                    executableOverride: parsed.executableOverride,
+                    physicalMemoryBytes: musePhysicalMemoryBytes
+                )
+            } else {
+                guard let profileName = candidate.connectionProfileName else {
+                    throw HarnessLaunchError.connectionProfileRequired
+                }
+                let store = secretStore ?? ProcessSecretStore.default(environment: environment)
+                let profile = try ProfileStore(directory: stateDirectory)
+                    .loadResolvedProfile(name: profileName, secretStore: store)
+                prepared = try HarnessLaunchPreparer().prepare(
+                    candidate: candidate,
+                    profile: profile,
+                    prompt: parsed.prompt,
+                    environment: environment,
+                    executableOverride: parsed.executableOverride
+                )
             }
-            let store = secretStore ?? ProcessSecretStore.default(environment: environment)
-            let profile = try ProfileStore(directory: stateDirectory)
-                .loadResolvedProfile(name: profileName, secretStore: store)
-            let prepared = try HarnessLaunchPreparer().prepare(
-                candidate: candidate,
-                profile: profile,
-                prompt: parsed.prompt,
-                environment: environment,
-                executableOverride: parsed.executableOverride
-            )
             if !parsed.json, let stdoutSink {
                 stdoutSink(humanExplanation(explanation))
                 emittedRoute = true
@@ -174,6 +188,10 @@ public enum AskWhyCommand {
                 launchStatus = "catalog_invalid"
             case .catalogVersionMismatch:
                 launchStatus = "catalog_version_mismatch"
+            case .localModelUnavailable:
+                launchStatus = "local_model_unavailable"
+            case .localContractUnknown:
+                launchStatus = "local_contract_unknown"
             default:
                 launchStatus = "failed"
             }

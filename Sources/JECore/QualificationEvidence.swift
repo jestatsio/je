@@ -307,17 +307,20 @@ public struct QualificationEvidenceProducer: Sendable {
     private let secretStore: SecretStoring
     private let harnessRunner: HarnessRunning
     private let recordedDay: String
+    private let musePhysicalMemoryBytes: UInt64?
 
     public init(
         directory: URL,
         secretStore: SecretStoring,
         harnessRunner: HarnessRunning,
-        recordedDay: String? = nil
+        recordedDay: String? = nil,
+        musePhysicalMemoryBytes: UInt64? = nil
     ) {
         self.directory = directory.standardizedFileURL
         self.secretStore = secretStore
         self.harnessRunner = harnessRunner
         self.recordedDay = recordedDay ?? Self.currentUTCDay()
+        self.musePhysicalMemoryBytes = musePhysicalMemoryBytes
     }
 
     public func produce(
@@ -355,12 +358,18 @@ public struct QualificationEvidenceProducer: Sendable {
             detail: identityValid ? "exact_identity_present" : "identity_incomplete"
         ))
 
+        let isMuseLocal = HarnessLaunchPreparer.isMuseLocal(candidate)
+        var museReport: MuseContractReport?
         if candidate.harness == .muse {
             do {
-                let report = try MuseContractDiscovery().discover(
+                let discovery = musePhysicalMemoryBytes.map {
+                    MuseContractDiscovery(physicalMemoryBytes: $0)
+                } ?? MuseContractDiscovery()
+                let report = try discovery.discover(
                     executableOverride: executableOverride,
                     environment: environment
                 )
+                museReport = report
                 let passed = report.localContractStatus == "builtin_glimmer_contract_discovered_not_qualified"
                 checks.append(check(
                     "muse_contract",
@@ -370,16 +379,34 @@ public struct QualificationEvidenceProducer: Sendable {
             } catch {
                 checks.append(check("muse_contract", passed: false, detail: "discovery_failed"))
             }
-            checks.append(check("connection_profile", passed: false, detail: "not_applicable"))
-            checks.append(check("secret_resolution", passed: false, detail: "not_applicable"))
-            appendSuiteFailures(to: &checks, launchDetail: "unsupported_harness", taskDetail: "unsupported_harness")
-            return record(
-                candidate: candidate,
-                checks: checks,
-                outputDigest: nil,
-                harnessExitCode: nil,
-                durationMs: nil
-            )
+            if !isMuseLocal {
+                checks.append(check("connection_profile", passed: false, detail: "not_applicable"))
+                checks.append(check("secret_resolution", passed: false, detail: "not_applicable"))
+                appendSuiteFailures(to: &checks, launchDetail: "unsupported_harness", taskDetail: "unsupported_harness")
+                return record(
+                    candidate: candidate,
+                    checks: checks,
+                    outputDigest: nil,
+                    harnessExitCode: nil,
+                    durationMs: nil
+                )
+            }
+            checks.append(check("connection_profile", passed: true, detail: "not_required"))
+            checks.append(check("secret_resolution", passed: true, detail: "not_required"))
+            guard museReport?.localContractStatus == "builtin_glimmer_contract_discovered_not_qualified" else {
+                appendSuiteFailures(
+                    to: &checks,
+                    launchDetail: museReport?.localContractStatus ?? "discovery_failed",
+                    taskDetail: museReport?.localContractStatus ?? "discovery_failed"
+                )
+                return record(
+                    candidate: candidate,
+                    checks: checks,
+                    outputDigest: nil,
+                    harnessExitCode: nil,
+                    durationMs: nil
+                )
+            }
         }
 
         if candidate.harness == .builtIn {
@@ -395,36 +422,38 @@ public struct QualificationEvidenceProducer: Sendable {
             )
         }
 
-        guard let profileName = candidate.connectionProfileName else {
-            checks.append(check("connection_profile", passed: false, detail: "missing"))
-            checks.append(check("secret_resolution", passed: false, detail: "missing_profile"))
-            appendSuiteFailures(to: &checks, launchDetail: "missing_profile", taskDetail: "missing_profile")
-            return record(
-                candidate: candidate,
-                checks: checks,
-                outputDigest: nil,
-                harnessExitCode: nil,
-                durationMs: nil
-            )
-        }
+        var profile: ResolvedConnectionProfile?
+        if !isMuseLocal {
+            guard let profileName = candidate.connectionProfileName else {
+                checks.append(check("connection_profile", passed: false, detail: "missing"))
+                checks.append(check("secret_resolution", passed: false, detail: "missing_profile"))
+                appendSuiteFailures(to: &checks, launchDetail: "missing_profile", taskDetail: "missing_profile")
+                return record(
+                    candidate: candidate,
+                    checks: checks,
+                    outputDigest: nil,
+                    harnessExitCode: nil,
+                    durationMs: nil
+                )
+            }
 
-        let profile: ResolvedConnectionProfile
-        do {
-            profile = try ProfileStore(directory: directory)
-                .loadResolvedProfile(name: profileName, secretStore: secretStore)
-            checks.append(check("connection_profile", passed: true, detail: "loaded"))
-            checks.append(check("secret_resolution", passed: true, detail: "resolved_without_recording_secret"))
-        } catch {
-            checks.append(check("connection_profile", passed: false, detail: "load_failed"))
-            checks.append(check("secret_resolution", passed: false, detail: "load_failed"))
-            appendSuiteFailures(to: &checks, launchDetail: "load_failed", taskDetail: "load_failed")
-            return record(
-                candidate: candidate,
-                checks: checks,
-                outputDigest: nil,
-                harnessExitCode: nil,
-                durationMs: nil
-            )
+            do {
+                profile = try ProfileStore(directory: directory)
+                    .loadResolvedProfile(name: profileName, secretStore: secretStore)
+                checks.append(check("connection_profile", passed: true, detail: "loaded"))
+                checks.append(check("secret_resolution", passed: true, detail: "resolved_without_recording_secret"))
+            } catch {
+                checks.append(check("connection_profile", passed: false, detail: "load_failed"))
+                checks.append(check("secret_resolution", passed: false, detail: "load_failed"))
+                appendSuiteFailures(to: &checks, launchDetail: "load_failed", taskDetail: "load_failed")
+                return record(
+                    candidate: candidate,
+                    checks: checks,
+                    outputDigest: nil,
+                    harnessExitCode: nil,
+                    durationMs: nil
+                )
+            }
         }
 
         guard candidate.launchMode == .headless else {
@@ -486,14 +515,27 @@ public struct QualificationEvidenceProducer: Sendable {
                         throw HarnessLaunchError.preparationFailed
                     }
                 }
-                let prepared = try HarnessLaunchPreparer().prepare(
-                    candidate: candidate,
-                    profile: profile,
-                    prompt: definition.prompt,
-                    environment: environment,
-                    executableOverride: executableOverride,
-                    currentDirectoryURL: taskDirectory
-                )
+                let prepared: PreparedHarnessLaunch
+                if let profile {
+                    prepared = try HarnessLaunchPreparer().prepare(
+                        candidate: candidate,
+                        profile: profile,
+                        prompt: definition.prompt,
+                        environment: environment,
+                        executableOverride: executableOverride,
+                        currentDirectoryURL: taskDirectory
+                    )
+                } else {
+                    prepared = try HarnessLaunchPreparer().prepareMuseLocal(
+                        candidate: candidate,
+                        prompt: definition.prompt,
+                        environment: environment,
+                        executableOverride: executableOverride,
+                        currentDirectoryURL: taskDirectory,
+                        discoveryReport: museReport,
+                        physicalMemoryBytes: musePhysicalMemoryBytes
+                    )
+                }
                 let started = Date()
                 do {
                     taskExit = try harnessRunner.run(prepared.spec)
@@ -732,6 +774,10 @@ public struct QualificationEvidenceProducer: Sendable {
             return "secret_in_arguments"
         case .authenticationFailed:
             return "authentication_failed"
+        case .localModelUnavailable:
+            return "local_model_unavailable"
+        case .localContractUnknown:
+            return "local_contract_unknown"
         case .preparationFailed:
             return "preparation_failed"
         case .launchFailed:

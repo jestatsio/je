@@ -39,9 +39,11 @@ foundation slice, not a claim that the launch platform is complete.
   in the launch support matrix. The user artifact can author personal-machine
   assignments with `je assignments`. Studio publication stays host-only.
 - `je why` route explanations and `je ask` harness launch for selected
-  personal-machine Codex and Claude Code assignments whose connection profile
-  matches. Catalog-bound Codex requires an exact version check, digest check,
-  catalog validation, and a private exact-byte snapshot. Ask records a
+  personal-machine Codex, Claude Code, and Muse built-in local assignments.
+  Catalog-bound Codex requires an exact version check, digest check, catalog
+  validation, and a private exact-byte snapshot. Muse local requires the
+  exact qualified CLI version, the `muse-local-glimmer` protocol, the MLX
+  engine family, and at least 64 GiB of physical memory. Ask records a
   content-free completed or failed usage trace.
 - `je doctor muse` performs bounded, non-inference contract discovery from
   public version and help surfaces. For Muse 1.4.14 it distinguishes the
@@ -59,10 +61,10 @@ foundation slice, not a claim that the launch platform is complete.
 - Memory and native Ollama profile writes and checks, gateway catalog-bound
   profile writes, native Ollama launch, connect, run, doctor, export, or
   credential commands.
-- Muse and built-in launch, gateway catalog-bound profile authoring, engine
-  lifecycle, broker traffic, memory sync, history storage, credential
-  migration, or remote access. Unsupported launch cells fail closed after
-  route display.
+- Muse arbitrary local endpoints and built-in launch, gateway catalog-bound
+  profile authoring, engine lifecycle, broker traffic, memory sync, history
+  storage, credential migration, or remote access. Unsupported launch cells
+  fail closed after route display.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
   until recorded qualification evidence exists.
 

@@ -53,6 +53,8 @@ public enum HarnessLaunchError: Error, Equatable, Sendable {
     case catalogVersionMismatch
     case secretInArguments
     case authenticationFailed
+    case localModelUnavailable
+    case localContractUnknown
     case preparationFailed
     case launchFailed
 
@@ -78,6 +80,10 @@ public enum HarnessLaunchError: Error, Equatable, Sendable {
             return "The saved connection key cannot appear in the prompt or harness arguments."
         case .authenticationFailed:
             return "The harness did not accept the saved connection for this launch."
+        case .localModelUnavailable:
+            return "The Muse built-in local model is unavailable on this machine."
+        case .localContractUnknown:
+            return "The Muse local launch contract is not qualified for this version or assignment."
         case .preparationFailed:
             return "The harness launch could not be prepared."
         case .launchFailed:
@@ -115,7 +121,91 @@ public struct ProcessHarnessRunner: HarnessRunning {
 }
 
 public struct HarnessLaunchPreparer: Sendable {
+    public static let museLocalProtocolImplementation = "muse-local-glimmer"
+
     public init() {}
+
+    public static func isMuseLocal(_ candidate: RouteCandidate) -> Bool {
+        candidate.harness == .muse
+            && candidate.protocolImplementation == museLocalProtocolImplementation
+    }
+
+    public func prepareMuseLocal(
+        candidate: RouteCandidate,
+        prompt: String,
+        environment: [String: String],
+        executableOverride: String?,
+        currentDirectoryURL: URL? = nil,
+        discoveryReport: MuseContractReport? = nil,
+        physicalMemoryBytes: UInt64? = nil
+    ) throws -> PreparedHarnessLaunch {
+        guard candidate.executionPlace == .personalMachine else {
+            throw HarnessLaunchError.unsupportedPlace
+        }
+        guard Self.isMuseLocal(candidate),
+              candidate.providerKind == .local,
+              candidate.engine == .mlxNative,
+              candidate.connectionProfileName == nil,
+              candidate.cloudProfileReference == nil,
+              ["local", "glimmer"].contains(candidate.modelArtifact) else {
+            throw HarnessLaunchError.localContractUnknown
+        }
+        let executable = try resolveExecutable(
+            override: executableOverride,
+            defaultName: "muse",
+            environment: environment
+        )
+        let report: MuseContractReport
+        if let discoveryReport {
+            report = discoveryReport
+        } else {
+            let discovery = physicalMemoryBytes.map {
+                MuseContractDiscovery(physicalMemoryBytes: $0)
+            } ?? MuseContractDiscovery()
+            do {
+                report = try discovery.discover(
+                    executableOverride: executable.path,
+                    environment: environment
+                )
+            } catch {
+                throw HarnessLaunchError.localContractUnknown
+            }
+        }
+        guard report.version == candidate.protocolVersion else {
+            throw HarnessLaunchError.localContractUnknown
+        }
+        switch report.localContractStatus {
+        case "builtin_glimmer_contract_discovered_not_qualified":
+            break
+        case "builtin_glimmer_unavailable_memory":
+            throw HarnessLaunchError.localModelUnavailable
+        default:
+            throw HarnessLaunchError.localContractUnknown
+        }
+        guard let experimentVariable = report.experimentEnvironmentVariable else {
+            throw HarnessLaunchError.localContractUnknown
+        }
+
+        let arguments: [String]
+        switch candidate.launchMode {
+        case .headless:
+            arguments = ["exec", "--provider", "local", "--model", candidate.modelArtifact, prompt]
+        case .interactive:
+            arguments = ["--provider", "local", "--model", candidate.modelArtifact, prompt]
+        case .singleStep:
+            throw HarnessLaunchError.unsupportedHarness
+        }
+        var childEnvironment = environment
+        childEnvironment.removeValue(forKey: "JE_GATEWAY_API_KEY")
+        childEnvironment.removeValue(forKey: "JE_STUDIO_API_KEY")
+        childEnvironment[experimentVariable] = "1"
+        return PreparedHarnessLaunch(spec: HarnessLaunchSpec(
+            executableURL: executable,
+            arguments: arguments,
+            environment: childEnvironment,
+            currentDirectoryURL: currentDirectoryURL
+        ))
+    }
 
     public func prepare(
         candidate: RouteCandidate,

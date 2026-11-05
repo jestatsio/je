@@ -27,7 +27,8 @@ public enum JECommandLine {
         runID: String? = nil,
         secretStore: SecretStoring? = nil,
         harnessRunner: HarnessRunning? = nil,
-        stdoutSink: CLIOutputSink? = nil
+        stdoutSink: CLIOutputSink? = nil,
+        musePhysicalMemoryBytes: UInt64? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -74,7 +75,8 @@ public enum JECommandLine {
                 environment: environment,
                 secretStore: secretStore,
                 harnessRunner: harnessRunner,
-                recordedDay: recordedDay
+                recordedDay: recordedDay,
+                musePhysicalMemoryBytes: musePhysicalMemoryBytes
             )
         case "why", "ask":
             return AskWhyCommand.run(
@@ -89,7 +91,8 @@ public enum JECommandLine {
                 runID: runID,
                 secretStore: secretStore,
                 harnessRunner: harnessRunner,
-                stdoutSink: stdoutSink
+                stdoutSink: stdoutSink,
+                musePhysicalMemoryBytes: musePhysicalMemoryBytes
             )
         case "profile":
             return ProfileCommands.run(

@@ -9,7 +9,8 @@ public enum AssignmentCommands {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         secretStore: SecretStoring? = nil,
         harnessRunner: HarnessRunning? = nil,
-        recordedDay: String? = nil
+        recordedDay: String? = nil,
+        musePhysicalMemoryBytes: UInt64? = nil
     ) -> CLIResult {
         guard arguments.first == "assignments", arguments.count >= 2 else {
             return invalid()
@@ -50,7 +51,8 @@ public enum AssignmentCommands {
                     environment: environment,
                     secretStore: secretStore,
                     harnessRunner: harnessRunner,
-                    recordedDay: recordedDay
+                    recordedDay: recordedDay,
+                    musePhysicalMemoryBytes: musePhysicalMemoryBytes
                 )
             case "remove":
                 guard arguments.count == 3 else { return invalid() }
@@ -85,7 +87,8 @@ public enum AssignmentCommands {
         environment: [String: String],
         secretStore: SecretStoring?,
         harnessRunner: HarnessRunning?,
-        recordedDay: String?
+        recordedDay: String?,
+        musePhysicalMemoryBytes: UInt64?
     ) throws -> CLIResult {
         guard arguments.count >= 3, !arguments[2].hasPrefix("-") else {
             return invalid()
@@ -131,7 +134,8 @@ public enum AssignmentCommands {
             directory: stateDirectory,
             secretStore: secretStore ?? ProcessSecretStore.default(environment: environment),
             harnessRunner: harnessRunner ?? ProcessHarnessRunner(),
-            recordedDay: recordedDay
+            recordedDay: recordedDay,
+            musePhysicalMemoryBytes: musePhysicalMemoryBytes
         )
         let record = producer.produce(
             candidate: candidate,
