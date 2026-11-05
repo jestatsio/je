@@ -49,7 +49,11 @@ foundation slice, not a claim that the launch platform is complete.
   `--context-file` values, `--context-list`, and repeated literal
   `--context-search` values. The loader bounds count, depth, file size,
   matches, and total size. It rejects traversal, symlinks, binary data,
-  and profile secrets.
+  and profile secrets. It also accepts explicit read-only memory search
+  context through `--memory-profile` with repeated `--memory-search`
+  values. The fetcher requires a credential that advertises no write
+  tools, verifies the advertised search schema, calls only the search
+  tool, and bounds queries, result size, and the combined context total.
   Catalog-bound Codex requires an exact version check, digest check, catalog
   validation, and a private exact-byte snapshot. Muse local requires the
   exact qualified CLI version, the `muse-local-glimmer` protocol, the MLX
@@ -81,7 +85,7 @@ foundation slice, not a claim that the launch platform is complete.
 
 - Gateway protocol probes, native Ollama launch,
   connect, run, export, or credential commands.
-- Muse arbitrary local endpoints, attached memory context, and non-Ollama
+- Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
   remote access. Unsupported launch cells fail closed after route display.

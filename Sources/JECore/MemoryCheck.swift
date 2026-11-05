@@ -60,15 +60,15 @@ public protocol MemoryHTTPTransport: Sendable {
 
 public enum MemoryConnectionChecker {
     public static let maximumTotalResponseBytes = 1_048_576
-    private static let clientProtocolVersion = "2025-03-26"
-    private static let supportedProtocolVersions: Set<String> = [
+    static let clientProtocolVersion = "2025-03-26"
+    static let supportedProtocolVersions: Set<String> = [
         "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"
     ]
-    private static let readTools: Set<String> = [
+    static let readTools: Set<String> = [
         "search_memories", "list_memories", "get_memory",
         "memory_history", "memory_operation_status"
     ]
-    private static let writeTools: Set<String> = [
+    static let writeTools: Set<String> = [
         "save_memory", "edit_memory", "undo_memory",
         "delete_memory", "restore_memory"
     ]

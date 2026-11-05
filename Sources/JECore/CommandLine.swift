@@ -104,7 +104,8 @@ public enum JECommandLine {
                 harnessRunner: harnessRunner,
                 stdoutSink: stdoutSink,
                 musePhysicalMemoryBytes: musePhysicalMemoryBytes,
-                builtInTransport: builtInTransport
+                builtInTransport: builtInTransport,
+                memoryTransport: memoryTransport
             )
         case "profile":
             return ProfileCommands.run(

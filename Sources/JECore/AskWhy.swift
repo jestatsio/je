@@ -5,6 +5,7 @@ public struct RouteExplanation: Codable, Equatable, Sendable {
     public let candidateCount: Int
     public let selectedCandidate: RouteCandidate?
     public let decision: RouteDecision
+    public let memoryProfileName: String?
 }
 
 public struct AskResult: Codable, Equatable, Sendable {
@@ -30,7 +31,8 @@ public enum AskWhyCommand {
         harnessRunner: HarnessRunning? = nil,
         stdoutSink: CLIOutputSink? = nil,
         musePhysicalMemoryBytes: UInt64? = nil,
-        builtInTransport: BuiltInHTTPTransport? = nil
+        builtInTransport: BuiltInHTTPTransport? = nil,
+        memoryTransport: MemoryHTTPTransport? = nil
     ) -> CLIResult {
         guard command == "why" || command == "ask" else {
             return invalid()
@@ -54,8 +56,12 @@ public enum AskWhyCommand {
             if (parsed.contextRoot == nil) != !hasContextSelection {
                 return invalid()
             }
+            if (parsed.memoryProfileName == nil) != parsed.memorySearches.isEmpty {
+                return invalid()
+            }
         } else if parsed.contextRoot != nil || !parsed.contextFiles.isEmpty
-            || parsed.contextList || !parsed.contextSearches.isEmpty {
+            || parsed.contextList || !parsed.contextSearches.isEmpty
+            || parsed.memoryProfileName != nil || !parsed.memorySearches.isEmpty {
             return invalid()
         }
         guard let personID = parsed.personID ?? clean(environment["JE_PERSON_ID"]) else {
@@ -104,7 +110,8 @@ public enum AskWhyCommand {
             personID: personID,
             candidateCount: candidates.count,
             selectedCandidate: selected,
-            decision: decision
+            decision: decision,
+            memoryProfileName: parsed.memoryProfileName
         )
 
         if command == "why" {
@@ -124,7 +131,8 @@ public enum AskWhyCommand {
             harnessRunner: harnessRunner,
             stdoutSink: stdoutSink,
             musePhysicalMemoryBytes: musePhysicalMemoryBytes,
-            builtInTransport: builtInTransport
+            builtInTransport: builtInTransport,
+            memoryTransport: memoryTransport
         )
     }
 
@@ -139,7 +147,8 @@ public enum AskWhyCommand {
         harnessRunner: HarnessRunning?,
         stdoutSink: CLIOutputSink?,
         musePhysicalMemoryBytes: UInt64?,
-        builtInTransport: BuiltInHTTPTransport?
+        builtInTransport: BuiltInHTTPTransport?,
+        memoryTransport: MemoryHTTPTransport?
     ) -> CLIResult {
         guard let candidate = explanation.selectedCandidate else {
             let result = AskResult(
@@ -210,6 +219,19 @@ public enum AskWhyCommand {
                         ))
                     }
                 }
+                if let memoryProfileName = parsed.memoryProfileName {
+                    let memoryProfile = try ProfileStore(directory: stateDirectory)
+                        .loadResolvedMemoryProfile(name: memoryProfileName, secretStore: store)
+                    contextFiles.append(contentsOf: try MemoryContextFetcher.fetch(
+                        profile: memoryProfile,
+                        queries: parsed.memorySearches,
+                        transport: memoryTransport ?? URLSessionMemoryHTTPTransport()
+                    ))
+                }
+                let contextBytes = contextFiles.reduce(0) { $0 + $1.text.utf8.count }
+                guard contextBytes <= BuiltInContextLoader.maximumTotalBytes else {
+                    throw BuiltInContextError.totalTooLarge
+                }
                 if !parsed.json, let stdoutSink {
                     stdoutSink(humanExplanation(explanation))
                     emittedRoute = true
@@ -257,6 +279,9 @@ public enum AskWhyCommand {
             launchStatus = harnessExitCode == 0 ? "completed" : "failed"
             }
         } catch let error as BuiltInContextError {
+            launchError = error.message
+            launchStatus = error.launchStatus
+        } catch let error as MemoryContextError {
             launchError = error.message
             launchStatus = error.launchStatus
         } catch let error as BuiltInExecutionError {
@@ -367,6 +392,9 @@ public enum AskWhyCommand {
             lines.append("Place: \(candidate.executionPlace.rawValue)")
             lines.append("Provider: \(candidate.providerKind.rawValue)")
             lines.append("Protocol: \(candidate.protocolImplementation) \(candidate.protocolVersion)")
+            if let memoryProfileName = explanation.memoryProfileName {
+                lines.append("Memory: \(memoryProfileName) (read-only)")
+            }
         } else {
             lines.append("Route: unavailable")
             for result in explanation.decision.filterResults where !result.passed {
@@ -425,6 +453,8 @@ public enum AskWhyCommand {
         var contextFiles: [String] = []
         var contextList = false
         var contextSearches: [String] = []
+        var memoryProfileName: String?
+        var memorySearches: [String] = []
         var prompt = ""
 
         init?(arguments: [String]) {
@@ -477,7 +507,7 @@ public enum AskWhyCommand {
             let flags = [
                 "--person", "--role", "--harness", "--engine", "--place", "--candidate",
                 "--cloud-profile", "--executable", "--context-root", "--context-file",
-                "--context-search"
+                "--context-search", "--memory-profile", "--memory-search"
             ]
             for flag in flags {
                 if argument == flag {
@@ -525,6 +555,11 @@ public enum AskWhyCommand {
                 contextFiles.append(value)
             case "--context-search":
                 contextSearches.append(value)
+            case "--memory-profile":
+                guard memoryProfileName == nil else { return false }
+                memoryProfileName = value
+            case "--memory-search":
+                memorySearches.append(value)
             default:
                 return false
             }
