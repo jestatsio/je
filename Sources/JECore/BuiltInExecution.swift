@@ -8,6 +8,7 @@ public enum BuiltInExecutionError: Error, Equatable, Sendable {
     case unsupportedRoute
     case profileMismatch
     case promptTooLarge
+    case secretInContext
     case harnessRunRequired
     case httpStatus(Int)
     case deadline
@@ -23,6 +24,8 @@ public enum BuiltInExecutionError: Error, Equatable, Sendable {
             return "The saved native profile does not match the selected built-in assignment."
         case .promptTooLarge:
             return "This prompt exceeds the bounded single-step request size."
+        case .secretInContext:
+            return "Built-in context may not contain the selected profile credential."
         case .harnessRunRequired:
             return "This request needs a new explicit harness run."
         case .httpStatus(let status):
@@ -46,6 +49,8 @@ public enum BuiltInExecutionError: Error, Equatable, Sendable {
             return "profile_mismatch"
         case .promptTooLarge:
             return "prompt_too_large"
+        case .secretInContext:
+            return "context_secret_rejected"
         case .harnessRunRequired:
             return "harness_run_required"
         case .httpStatus:
@@ -87,6 +92,7 @@ public enum BuiltInExecutor {
         candidate: RouteCandidate,
         profile: ResolvedOllamaProfile,
         prompt: String,
+        contextFiles: [BuiltInContextFile] = [],
         transport: BuiltInHTTPTransport
     ) throws -> String {
         guard isSupported(candidate) else {
@@ -99,10 +105,27 @@ public enum BuiltInExecutor {
         guard prompt.utf8.count <= maximumPromptBytes else {
             throw BuiltInExecutionError.promptTooLarge
         }
+        guard contextFiles.count <= BuiltInContextLoader.maximumFiles else {
+            throw BuiltInExecutionError.promptTooLarge
+        }
+        for file in contextFiles {
+            guard file.text.utf8.count <= BuiltInContextLoader.maximumFileBytes else {
+                throw BuiltInExecutionError.promptTooLarge
+            }
+            if !profile.secret.isEmpty
+                && (file.text.contains(profile.secret)
+                    || file.relativePath.contains(profile.secret)) {
+                throw BuiltInExecutionError.secretInContext
+            }
+        }
+        let assembled = assembledContent(prompt: prompt, contextFiles: contextFiles)
+        guard assembled.utf8.count <= maximumPromptBytes + BuiltInContextLoader.maximumTotalBytes else {
+            throw BuiltInExecutionError.promptTooLarge
+        }
         guard let url = URL(string: profile.endpoint + "/api/chat") else {
             throw BuiltInExecutionError.unreachable
         }
-        let body = try requestBody(model: profile.model, prompt: prompt)
+        let body = try requestBody(model: profile.model, content: assembled)
         let response: OllamaHTTPResponse
         do {
             response = try transport.postJSON(url: url, bearerToken: profile.secret, body: body)
@@ -122,7 +145,21 @@ public enum BuiltInExecutor {
         return try answer(in: response.data)
     }
 
-    private static func requestBody(model: String, prompt: String) throws -> Data {
+    private static func assembledContent(
+        prompt: String,
+        contextFiles: [BuiltInContextFile]
+    ) -> String {
+        guard !contextFiles.isEmpty else {
+            return prompt
+        }
+        var sections = contextFiles.map { file in
+            "Context file: \(file.relativePath)\n\(file.text)"
+        }
+        sections.append("User request:\n\(prompt)")
+        return sections.joined(separator: "\n\n")
+    }
+
+    private static func requestBody(model: String, content: String) throws -> Data {
         let payload: [String: Any] = [
             "model": model,
             "stream": false,
@@ -131,7 +168,7 @@ public enum BuiltInExecutor {
                     "role": "system",
                     "content": "Answer in one response. Do not request tools, file changes, commands, or more steps."
                 ],
-                ["role": "user", "content": prompt]
+                ["role": "user", "content": content]
             ]
         ]
         do {

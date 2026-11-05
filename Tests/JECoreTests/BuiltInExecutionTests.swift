@@ -187,6 +187,130 @@ final class BuiltInExecutionTests: XCTestCase {
         XCTAssertTrue(ledger.contains("\"outcome\":\"failed\""))
     }
 
+    func testContextLoaderReadsExplicitFilesInsideRoot() throws {
+        let root = try makeContextRoot()
+        let files = try BuiltInContextLoader.load(
+            root: root,
+            relativePaths: ["notes.txt", "docs/guide.txt"],
+            secret: secret
+        )
+        XCTAssertEqual(files.map(\.relativePath), ["notes.txt", "docs/guide.txt"])
+        XCTAssertEqual(files.map(\.text), ["first context\n", "second context\n"])
+    }
+
+    func testContextLoaderRejectsTraversalSymlinkBinaryAndSecret() throws {
+        let root = try makeContextRoot()
+        let outside = temporary.appendingPathComponent("outside.txt")
+        try Data("outside\n".utf8).write(to: outside)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("linked.txt"),
+            withDestinationURL: outside
+        )
+        try Data([0, 1, 2, 3]).write(to: root.appendingPathComponent("binary.bin"))
+        try Data(("token is " + secret + "\n").utf8)
+            .write(to: root.appendingPathComponent("leak.txt"))
+
+        for path in ["../outside.txt", "/etc/passwd", "linked.txt", "binary.bin", "leak.txt", "missing.txt"] {
+            XCTAssertThrowsError(
+                try BuiltInContextLoader.load(root: root, relativePaths: [path], secret: secret),
+                "path should fail: \(path)"
+            ) { error in
+                XCTAssertTrue(error is BuiltInContextError)
+                XCTAssertFalse(String(describing: error).contains(secret))
+            }
+        }
+    }
+
+    func testContextLoaderRejectsOversizedFile() throws {
+        let root = try makeContextRoot()
+        try Data(String(repeating: "x", count: BuiltInContextLoader.maximumFileBytes + 1).utf8)
+            .write(to: root.appendingPathComponent("large.txt"))
+        XCTAssertThrowsError(
+            try BuiltInContextLoader.load(root: root, relativePaths: ["large.txt"], secret: secret)
+        ) { error in
+            XCTAssertEqual(error as? BuiltInContextError, .fileTooLarge)
+        }
+    }
+
+    func testExecutorIncludesExplicitContextBeforePrompt() throws {
+        let transport = FakeTransport(response: successResponse())
+        let output = try BuiltInExecutor.execute(
+            candidate: candidate(),
+            profile: resolvedProfile(),
+            prompt: prompt,
+            contextFiles: [
+                BuiltInContextFile(relativePath: "notes.txt", text: "first context\n")
+            ],
+            transport: transport
+        )
+        XCTAssertEqual(output, answer)
+        let body = try XCTUnwrap(transport.body)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let messages = try XCTUnwrap(object["messages"] as? [[String: Any]])
+        let content = try XCTUnwrap(messages.last?["content"] as? String)
+        XCTAssertTrue(content.contains("Context file: notes.txt"))
+        XCTAssertTrue(content.contains("first context"))
+        XCTAssertTrue(content.contains("User request:"))
+        XCTAssertTrue(content.hasSuffix(prompt))
+        XCTAssertNil(object["tools"])
+    }
+
+    func testAskSingleStepWithContextFileReturnsAnswer() throws {
+        try publish(candidate())
+        try saveOllamaProfile()
+        let root = try makeContextRoot()
+        let transport = FakeTransport(response: successResponse())
+        let result = JECommandLine.run(
+            ["--state-dir", stateDirectory.path, "ask", "--person", "alice", "--role", "fast",
+             "--single-step", "--context-root", root.path,
+             "--context-file", "notes.txt", "--json", "--", prompt],
+            environment: [:],
+            recordedDay: "2026-11-04",
+            runID: "run-builtin-context",
+            secretStore: fakeSecrets,
+            builtInTransport: transport
+        )
+        XCTAssertEqual(result.code, 0, result.stderr)
+        let decoded = try JSONDecoder().decode(AskResult.self, from: Data(result.stdout.utf8))
+        XCTAssertEqual(decoded.answer, answer)
+        let body = try XCTUnwrap(transport.body)
+        XCTAssertTrue(String(decoding: body, as: UTF8.self).contains("first context"))
+        let ledger = try String(contentsOf: ledgerURL, encoding: .utf8)
+        XCTAssertFalse(ledger.contains("first context"))
+        XCTAssertFalse(ledger.contains(prompt))
+    }
+
+    func testAskContextOutsideSingleStepIsInvalid() throws {
+        try publish(candidate())
+        try saveOllamaProfile()
+        let root = try makeContextRoot()
+        let transport = FakeTransport(response: successResponse())
+        let result = JECommandLine.run(
+            ["--state-dir", stateDirectory.path, "ask", "--person", "alice", "--role", "fast",
+             "--context-root", root.path, "--context-file", "notes.txt", "--", prompt],
+            environment: [:],
+            secretStore: fakeSecrets,
+            builtInTransport: transport
+        )
+        XCTAssertEqual(result.code, 2)
+        XCTAssertTrue(result.stderr.contains("Invalid arguments."))
+        XCTAssertEqual(transport.callCount, 0)
+    }
+
+    private func makeContextRoot() throws -> URL {
+        let root = temporary.appendingPathComponent("context-root", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("docs", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try Data("first context\n".utf8).write(to: root.appendingPathComponent("notes.txt"))
+        try Data("second context\n".utf8)
+            .write(to: root.appendingPathComponent("docs/guide.txt"))
+        return root
+    }
+
     private var ledgerURL: URL {
         stateDirectory.appendingPathComponent("usage/detailed.jsonl")
     }

@@ -48,6 +48,11 @@ public enum AskWhyCommand {
             if parsed.executableOverride != nil {
                 return invalid()
             }
+            if (parsed.contextRoot == nil) != parsed.contextFiles.isEmpty {
+                return invalid()
+            }
+        } else if parsed.contextRoot != nil || !parsed.contextFiles.isEmpty {
+            return invalid()
         }
         guard let personID = parsed.personID ?? clean(environment["JE_PERSON_ID"]) else {
             return CLIResult(
@@ -170,6 +175,22 @@ public enum AskWhyCommand {
                 let store = secretStore ?? ProcessSecretStore.default(environment: environment)
                 let profile = try ProfileStore(directory: stateDirectory)
                     .loadResolvedOllamaProfile(name: profileName, secretStore: store)
+                var contextFiles: [BuiltInContextFile] = []
+                if let contextRoot = parsed.contextRoot {
+                    let expanded = (contextRoot as NSString).expandingTildeInPath
+                    let rootURL: URL
+                    if expanded.hasPrefix("/") {
+                        rootURL = URL(fileURLWithPath: expanded)
+                    } else {
+                        rootURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                            .appendingPathComponent(expanded, isDirectory: true)
+                    }
+                    contextFiles = try BuiltInContextLoader.load(
+                        root: rootURL,
+                        relativePaths: parsed.contextFiles,
+                        secret: profile.secret
+                    )
+                }
                 if !parsed.json, let stdoutSink {
                     stdoutSink(humanExplanation(explanation))
                     emittedRoute = true
@@ -178,6 +199,7 @@ public enum AskWhyCommand {
                     candidate: candidate,
                     profile: profile,
                     prompt: parsed.prompt,
+                    contextFiles: contextFiles,
                     transport: builtInTransport ?? URLSessionBuiltInHTTPTransport()
                 )
                 launchStatus = "completed"
@@ -215,6 +237,9 @@ public enum AskWhyCommand {
             prepared.cleanup()
             launchStatus = harnessExitCode == 0 ? "completed" : "failed"
             }
+        } catch let error as BuiltInContextError {
+            launchError = error.message
+            launchStatus = error.launchStatus
         } catch let error as BuiltInExecutionError {
             launchError = error.message
             launchStatus = error.launchStatus
@@ -377,6 +402,8 @@ public enum AskWhyCommand {
         var candidateID: String?
         var cloudProfileReference: String?
         var executableOverride: String?
+        var contextRoot: String?
+        var contextFiles: [String] = []
         var prompt = ""
 
         init?(arguments: [String]) {
@@ -421,7 +448,10 @@ public enum AskWhyCommand {
             arguments: [String],
             index: inout Int
         ) -> (String, String)? {
-            let flags = ["--person", "--role", "--harness", "--engine", "--place", "--candidate", "--cloud-profile", "--executable"]
+            let flags = [
+                "--person", "--role", "--harness", "--engine", "--place", "--candidate",
+                "--cloud-profile", "--executable", "--context-root", "--context-file"
+            ]
             for flag in flags {
                 if argument == flag {
                     guard index + 1 < arguments.count else { return nil }
@@ -461,6 +491,11 @@ public enum AskWhyCommand {
                 cloudProfileReference = value
             case "--executable":
                 executableOverride = value
+            case "--context-root":
+                guard contextRoot == nil else { return false }
+                contextRoot = value
+            case "--context-file":
+                contextFiles.append(value)
             default:
                 return false
             }
