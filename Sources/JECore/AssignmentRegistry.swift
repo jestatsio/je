@@ -24,7 +24,9 @@ public struct AssignmentRegistry: Sendable {
             return []
         }
         let data = try stateStore.readPrivateData(registryURL, limit: 1024 * 1024)
-        return try Self.decodeCandidates(from: data)
+        let candidates = try Self.decodeCandidates(from: data)
+        try validateQualificationEvidence(candidates)
+        return candidates
     }
 
     @discardableResult
@@ -55,6 +57,7 @@ public struct AssignmentRegistry: Sendable {
     }
 
     public func save(_ candidates: [RouteCandidate]) throws {
+        try validateQualificationEvidence(candidates)
         let records = try candidates.map { candidate -> AssignmentRecord in
             let validated = try Self.candidate(
                 from: AssignmentRecord(candidate: candidate),
@@ -83,6 +86,20 @@ public struct AssignmentRegistry: Sendable {
             throw StateStoreError("The assignment registry could not be encoded.")
         }
         try writeRegistryAtomically(data)
+    }
+
+    private func validateQualificationEvidence(_ candidates: [RouteCandidate]) throws {
+        let evidenceStore = QualificationEvidenceStore(directory: directory)
+        for candidate in candidates {
+            guard let reference = candidate.qualificationEvidenceReference,
+                  reference.hasPrefix("evidence:qualification:") else {
+                continue
+            }
+            guard candidate.qualificationStatus == .qualified else {
+                throw StateStoreError("Qualification evidence records require a qualified assignment.")
+            }
+            try evidenceStore.validate(reference: reference, for: candidate)
+        }
     }
 
     private func writeRegistryAtomically(_ data: Data) throws {

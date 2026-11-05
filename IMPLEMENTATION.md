@@ -47,6 +47,10 @@ foundation slice, not a claim that the launch platform is complete.
   public version and help surfaces. For Muse 1.4.14 it distinguishes the
   gated built-in Glimmer route from an arbitrary local endpoint contract and
   returns an evidence reference without claiming qualification.
+- `je assignments qualify` runs one bounded headless file-copy task in a
+  temporary private workspace. It stores content-addressed qualification
+  evidence with exact candidate identity, exit code, duration, and output
+  digest. It marks an assignment qualified only on an explicit passing run.
 
 ## What this slice does not contain
 

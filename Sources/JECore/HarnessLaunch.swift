@@ -4,6 +4,19 @@ public struct HarnessLaunchSpec: Equatable, Sendable {
     public let executableURL: URL
     public let arguments: [String]
     public let environment: [String: String]
+    public let currentDirectoryURL: URL?
+
+    public init(
+        executableURL: URL,
+        arguments: [String],
+        environment: [String: String],
+        currentDirectoryURL: URL? = nil
+    ) {
+        self.executableURL = executableURL
+        self.arguments = arguments
+        self.environment = environment
+        self.currentDirectoryURL = currentDirectoryURL
+    }
 }
 
 public final class PreparedHarnessLaunch: @unchecked Sendable {
@@ -85,6 +98,9 @@ public struct ProcessHarnessRunner: HarnessRunning {
         process.executableURL = spec.executableURL
         process.arguments = spec.arguments
         process.environment = spec.environment
+        if let currentDirectoryURL = spec.currentDirectoryURL {
+            process.currentDirectoryURL = currentDirectoryURL
+        }
         do {
             try process.run()
         } catch {
@@ -106,7 +122,8 @@ public struct HarnessLaunchPreparer: Sendable {
         profile: ResolvedConnectionProfile,
         prompt: String,
         environment: [String: String],
-        executableOverride: String?
+        executableOverride: String?,
+        currentDirectoryURL: URL? = nil
     ) throws -> PreparedHarnessLaunch {
         guard candidate.executionPlace == .personalMachine else {
             throw HarnessLaunchError.unsupportedPlace
@@ -127,7 +144,8 @@ public struct HarnessLaunchPreparer: Sendable {
                 profile: profile,
                 prompt: prompt,
                 environment: environment,
-                executableOverride: executableOverride
+                executableOverride: executableOverride,
+                currentDirectoryURL: currentDirectoryURL
             )
         case .claudeCode:
             return try prepareClaude(
@@ -135,7 +153,8 @@ public struct HarnessLaunchPreparer: Sendable {
                 profile: profile,
                 prompt: prompt,
                 environment: environment,
-                executableOverride: executableOverride
+                executableOverride: executableOverride,
+                currentDirectoryURL: currentDirectoryURL
             )
         case .muse, .builtIn:
             throw HarnessLaunchError.unsupportedHarness
@@ -147,7 +166,8 @@ public struct HarnessLaunchPreparer: Sendable {
         profile: ResolvedConnectionProfile,
         prompt: String,
         environment: [String: String],
-        executableOverride: String?
+        executableOverride: String?,
+        currentDirectoryURL: URL?
     ) throws -> PreparedHarnessLaunch {
         let executable = try resolveExecutable(
             override: executableOverride,
@@ -230,7 +250,8 @@ public struct HarnessLaunchPreparer: Sendable {
             let spec = HarnessLaunchSpec(
                 executableURL: executable,
                 arguments: arguments,
-                environment: childEnvironment
+                environment: childEnvironment,
+                currentDirectoryURL: currentDirectoryURL
             )
             try validateNoSecretInArguments(spec, secret: profile.secret)
             return PreparedHarnessLaunch(spec: spec, temporaryDirectories: temporaryDirectories)
@@ -247,7 +268,8 @@ public struct HarnessLaunchPreparer: Sendable {
         profile: ResolvedConnectionProfile,
         prompt: String,
         environment: [String: String],
-        executableOverride: String?
+        executableOverride: String?,
+        currentDirectoryURL: URL?
     ) throws -> PreparedHarnessLaunch {
         let executable = try resolveExecutable(
             override: executableOverride,
@@ -300,7 +322,8 @@ public struct HarnessLaunchPreparer: Sendable {
             let spec = HarnessLaunchSpec(
                 executableURL: executable,
                 arguments: arguments,
-                environment: authEnvironment
+                environment: authEnvironment,
+                currentDirectoryURL: currentDirectoryURL
             )
             try validateNoSecretInArguments(spec, secret: profile.secret)
             return PreparedHarnessLaunch(spec: spec, temporaryDirectories: [temporary])

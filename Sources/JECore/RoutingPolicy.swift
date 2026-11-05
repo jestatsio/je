@@ -75,6 +75,34 @@ public struct RouteCandidate: Codable, Equatable, Hashable, Sendable {
         self.available = available
         self.publishedPriority = publishedPriority
     }
+
+    public func withQualification(
+        status: QualificationStatus,
+        evidenceReference: String?
+    ) -> RouteCandidate {
+        RouteCandidate(
+            id: id,
+            role: role,
+            engine: engine,
+            harness: harness,
+            launchMode: launchMode,
+            executionPlace: executionPlace,
+            providerKind: providerKind,
+            modelArtifact: modelArtifact,
+            engineVersion: engineVersion,
+            modelFormat: modelFormat,
+            protocolImplementation: protocolImplementation,
+            protocolVersion: protocolVersion,
+            configurationDigest: configurationDigest,
+            qualificationStatus: status,
+            allowedPersonIDs: allowedPersonIDs,
+            cloudProfileReference: cloudProfileReference,
+            connectionProfileName: connectionProfileName,
+            qualificationEvidenceReference: evidenceReference,
+            available: available,
+            publishedPriority: publishedPriority
+        )
+    }
 }
 
 public enum CloudAuthorization: Codable, Equatable, Sendable {

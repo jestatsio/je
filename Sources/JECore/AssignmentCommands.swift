@@ -3,7 +3,14 @@ import Foundation
 public enum AssignmentCommands {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
 
-    public static func run(arguments: [String], stateDirectory: URL) -> CLIResult {
+    public static func run(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        secretStore: SecretStoring? = nil,
+        harnessRunner: HarnessRunning? = nil,
+        recordedDay: String? = nil
+    ) -> CLIResult {
         guard arguments.first == "assignments", arguments.count >= 2 else {
             return invalid()
         }
@@ -35,6 +42,16 @@ public enum AssignmentCommands {
                     code: 0,
                     stdout: "Assignment registry valid: \(candidates.count) assignments.\n"
                 )
+            case "qualify":
+                return try qualify(
+                    arguments: arguments,
+                    registry: registry,
+                    stateDirectory: stateDirectory,
+                    environment: environment,
+                    secretStore: secretStore,
+                    harnessRunner: harnessRunner,
+                    recordedDay: recordedDay
+                )
             case "remove":
                 guard arguments.count == 3 else { return invalid() }
                 _ = try registry.remove(id: arguments[2])
@@ -61,9 +78,107 @@ public enum AssignmentCommands {
         }
     }
 
-    private static func encode<T: Encodable>(_ value: T) -> CLIResult {
+    private static func qualify(
+        arguments: [String],
+        registry: AssignmentRegistry,
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        harnessRunner: HarnessRunning?,
+        recordedDay: String?
+    ) throws -> CLIResult {
+        guard arguments.count >= 3, !arguments[2].hasPrefix("-") else {
+            return invalid()
+        }
+        let id = arguments[2]
+        var asJSON = false
+        var markQualified = false
+        var executable: String?
+        var index = 3
+        while index < arguments.count {
+            let argument = arguments[index]
+            if argument == "--json" {
+                asJSON = true
+                index += 1
+            } else if argument == "--mark-qualified" {
+                markQualified = true
+                index += 1
+            } else if argument == "--executable" {
+                guard index + 1 < arguments.count, !arguments[index + 1].isEmpty else {
+                    return invalid()
+                }
+                executable = arguments[index + 1]
+                index += 2
+            } else if argument.hasPrefix("--executable=") {
+                let value = String(argument.dropFirst("--executable=".count))
+                guard !value.isEmpty else { return invalid() }
+                executable = value
+                index += 1
+            } else {
+                return invalid()
+            }
+        }
+        guard let candidate = try registry.loadCandidates().first(where: { $0.id == id }) else {
+            return CLIResult(code: 2, stderr: "The requested assignment does not exist.\n")
+        }
+        guard candidate.executionPlace == .personalMachine else {
+            return CLIResult(
+                code: 2,
+                stderr: "Studio assignment qualification belongs to the operator host build.\n"
+            )
+        }
+        let producer = QualificationEvidenceProducer(
+            directory: stateDirectory,
+            secretStore: secretStore ?? ProcessSecretStore.default(environment: environment),
+            harnessRunner: harnessRunner ?? ProcessHarnessRunner(),
+            recordedDay: recordedDay
+        )
+        let record = producer.produce(
+            candidate: candidate,
+            environment: environment,
+            executableOverride: executable
+        )
+        let stored = try QualificationEvidenceStore(directory: stateDirectory).store(record)
+        var marked = false
+        if markQualified && record.passed {
+            let updated = candidate.withQualification(
+                status: .qualified,
+                evidenceReference: record.evidenceReference
+            )
+            _ = try registry.publish(updated, replace: true)
+            marked = true
+        }
+        let result = QualificationCommandResult(
+            record: record,
+            evidenceStored: stored,
+            markedQualified: marked
+        )
+        if asJSON {
+            return encode(result, code: record.passed ? 0 : 2)
+        }
+        let outcome = record.passed ? "passed" : "failed"
+        let markedText = marked ? "Assignment marked qualified.\n" : "Assignment status unchanged.\n"
+        return CLIResult(
+            code: record.passed ? 0 : 2,
+            stdout: """
+            Assignment: \(candidate.id)
+            Qualification: \(outcome)
+            Evidence: \(record.evidenceReference)
+            \(markedText)
+            """,
+            stderr: record.passed ? "" : "Qualification checks did not pass.\n"
+        )
+    }
+
+    private struct QualificationCommandResult: Codable {
+        let record: QualificationEvidenceRecord
+        let evidenceStored: Bool
+        let markedQualified: Bool
+    }
+
+    private static func encode<T: Encodable>(_ value: T, code: Int32 = 0) -> CLIResult {
         do {
-            return CLIResult(code: 0, stdout: try StableJSON.encode(value))
+            return CLIResult(code: code, stdout: try StableJSON.encode(value))
         } catch {
             return CLIResult(code: 1, stderr: "Could not encode the requested report.\n")
         }

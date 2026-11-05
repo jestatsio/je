@@ -70,7 +70,11 @@ public enum JECommandLine {
                 stateDirectory: stateDirectory(
                     explicit: explicitStateDirectory,
                     environment: environment
-                )
+                ),
+                environment: environment,
+                secretStore: secretStore,
+                harnessRunner: harnessRunner,
+                recordedDay: recordedDay
             )
         case "why", "ask":
             return AskWhyCommand.run(
@@ -360,6 +364,7 @@ public enum JECommandLine {
       ollama profile show NAME Show public native Ollama fields without credentials
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
+      assignments qualify ID   Run and store one bounded qualification task
       why [flags] [--] PROMPT  Explain the selected qualified route without running it
       ask [flags] -- PROMPT    Select a route and launch its supported harness
 
