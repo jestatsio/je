@@ -63,6 +63,10 @@ foundation slice, not a claim that the launch platform is complete.
   gateway model listing check with the saved key. With `--probe` it also
   runs the bounded Responses and Messages protocol checks from the Python
   client and writes a private report under `reports/` in the state directory.
+- `je credential --profile NAME` prints the saved gateway key for a desktop
+  credential helper, matching the Python client. It resolves embedded
+  legacy keys and native secret references through the gateway profile
+  loader and prints nothing else.
 - `je ollama --profile NAME check` performs a bounded, no-redirect,
   non-inference native model listing check with the saved key. It reports only
   whether the default model is available.
@@ -84,7 +88,7 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Native Ollama launch, connect, run, export, or credential commands.
+- Native Ollama launch, connect, run, or export commands.
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or

@@ -17,7 +17,7 @@ public struct CLIResult: Equatable, Sendable {
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
     private static let legacyCommands: Set<String> = [
-        "setup", "connect", "run", "export", "credential"
+        "setup", "connect", "run", "export"
     ]
 
     public static func run(
@@ -137,6 +137,16 @@ public enum JECommandLine {
                 environment: environment,
                 secretStore: secretStore,
                 ollamaTransport: ollamaTransport
+            )
+        case "credential":
+            return credential(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore
             )
         case "workspace":
             return CLIResult(
@@ -340,6 +350,36 @@ public enum JECommandLine {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "The gateway connection could not be checked.\n")
+        }
+    }
+
+    private static func credential(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?
+    ) -> CLIResult {
+        guard arguments.first == "credential" else { return invalid() }
+        let rest = Array(arguments.dropFirst())
+        let profileName: String
+        if rest.count == 2 && rest[0] == "--profile" {
+            profileName = rest[1]
+        } else if rest.count == 1 && rest[0].hasPrefix("--profile=") {
+            profileName = String(rest[0].dropFirst("--profile=".count))
+        } else {
+            return invalid()
+        }
+        guard !profileName.isEmpty else { return invalid() }
+        do {
+            let profile = try ProfileStore(directory: stateDirectory).loadResolvedProfile(
+                name: profileName,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+            return CLIResult(code: 0, stdout: profile.secret + "\n")
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The saved credential could not be supplied.\n")
         }
     }
 
@@ -577,6 +617,7 @@ public enum JECommandLine {
       contracts [--json]       Show the frozen Python oracle contract
       doctor muse [--json]     Probe public Muse local-contract signals without inference
       doctor --profile NAME    Check a gateway key and model without inference
+      credential --profile NAME Supply a saved key to a desktop credential helper
       profile list             List saved connection names without credentials
       profile show NAME        Show public connection fields without credentials
       memory list              List saved memory connection names without tokens
@@ -587,6 +628,7 @@ public enum JECommandLine {
       ollama profile show NAME Show public native Ollama fields without credentials
       ollama profile add NAME  Save a native Ollama connection with a secret reference
       ollama --profile N check Check a native Ollama key and default model without inference
+      ollama --profile N [...] Start the native Ollama CLI through a temporary loopback relay
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
       assignments qualify ID   Run and store one bounded qualification task
