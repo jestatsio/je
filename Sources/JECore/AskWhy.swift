@@ -48,10 +48,14 @@ public enum AskWhyCommand {
             if parsed.executableOverride != nil {
                 return invalid()
             }
-            if (parsed.contextRoot == nil) != parsed.contextFiles.isEmpty {
+            let hasContextSelection = !parsed.contextFiles.isEmpty
+                || parsed.contextList
+                || !parsed.contextSearches.isEmpty
+            if (parsed.contextRoot == nil) != !hasContextSelection {
                 return invalid()
             }
-        } else if parsed.contextRoot != nil || !parsed.contextFiles.isEmpty {
+        } else if parsed.contextRoot != nil || !parsed.contextFiles.isEmpty
+            || parsed.contextList || !parsed.contextSearches.isEmpty {
             return invalid()
         }
         guard let personID = parsed.personID ?? clean(environment["JE_PERSON_ID"]) else {
@@ -185,11 +189,26 @@ public enum AskWhyCommand {
                         rootURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                             .appendingPathComponent(expanded, isDirectory: true)
                     }
-                    contextFiles = try BuiltInContextLoader.load(
-                        root: rootURL,
-                        relativePaths: parsed.contextFiles,
-                        secret: profile.secret
-                    )
+                    if parsed.contextList {
+                        contextFiles.append(try BuiltInContextLoader.list(
+                            root: rootURL,
+                            secret: profile.secret
+                        ))
+                    }
+                    if !parsed.contextFiles.isEmpty {
+                        contextFiles.append(contentsOf: try BuiltInContextLoader.load(
+                            root: rootURL,
+                            relativePaths: parsed.contextFiles,
+                            secret: profile.secret
+                        ))
+                    }
+                    for query in parsed.contextSearches {
+                        contextFiles.append(try BuiltInContextLoader.search(
+                            root: rootURL,
+                            query: query,
+                            secret: profile.secret
+                        ))
+                    }
                 }
                 if !parsed.json, let stdoutSink {
                     stdoutSink(humanExplanation(explanation))
@@ -404,6 +423,8 @@ public enum AskWhyCommand {
         var executableOverride: String?
         var contextRoot: String?
         var contextFiles: [String] = []
+        var contextList = false
+        var contextSearches: [String] = []
         var prompt = ""
 
         init?(arguments: [String]) {
@@ -430,6 +451,11 @@ public enum AskWhyCommand {
                     index += 1
                     continue
                 }
+                if argument == "--context-list" {
+                    contextList = true
+                    index += 1
+                    continue
+                }
                 if let pair = flagValue(argument: argument, arguments: arguments, index: &index) {
                     guard apply(flag: pair.0, value: pair.1) else { return nil }
                     continue
@@ -450,7 +476,8 @@ public enum AskWhyCommand {
         ) -> (String, String)? {
             let flags = [
                 "--person", "--role", "--harness", "--engine", "--place", "--candidate",
-                "--cloud-profile", "--executable", "--context-root", "--context-file"
+                "--cloud-profile", "--executable", "--context-root", "--context-file",
+                "--context-search"
             ]
             for flag in flags {
                 if argument == flag {
@@ -496,6 +523,8 @@ public enum AskWhyCommand {
                 contextRoot = value
             case "--context-file":
                 contextFiles.append(value)
+            case "--context-search":
+                contextSearches.append(value)
             default:
                 return false
             }

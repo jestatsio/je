@@ -88,6 +88,12 @@ public enum BuiltInContextLoader {
     public static let maximumFiles = 8
     public static let maximumFileBytes = 16_384
     public static let maximumTotalBytes = 32_768
+    public static let maximumListedFiles = 256
+    public static let maximumSearchMatches = 50
+    public static let maximumSearchQueryCharacters = 128
+    public static let maximumSearchFileBytes = 262_144
+    private static let maximumDepth = 8
+    private static let maximumSearchLineCharacters = 256
 
     public static func load(
         root: URL,
@@ -116,6 +122,186 @@ public enum BuiltInContextLoader {
             files.append(file)
         }
         return files
+    }
+
+    public static func list(root: URL, secret: String) throws -> BuiltInContextFile {
+        let canonicalRoot = try canonicalDirectory(root)
+        let paths = try regularFilePaths(root: canonicalRoot, secret: secret)
+        let text = paths.isEmpty ? "" : paths.joined(separator: "\n") + "\n"
+        guard text.utf8.count <= maximumFileBytes else {
+            throw BuiltInContextError.totalTooLarge
+        }
+        return BuiltInContextFile(relativePath: "[file list]", text: text)
+    }
+
+    public static func search(
+        root: URL,
+        query: String,
+        secret: String
+    ) throws -> BuiltInContextFile {
+        guard !query.isEmpty,
+              query.count <= maximumSearchQueryCharacters,
+              !query.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }) else {
+            throw BuiltInContextError.invalidPath
+        }
+        if !secret.isEmpty && query.contains(secret) {
+            throw BuiltInContextError.secretInContext
+        }
+        let canonicalRoot = try canonicalDirectory(root)
+        let paths = try regularFilePaths(root: canonicalRoot, secret: secret)
+        var matches: [String] = []
+        for relativePath in paths {
+            guard let text = try searchText(
+                root: canonicalRoot,
+                relativePath: relativePath,
+                secret: secret
+            ) else {
+                continue
+            }
+            for (index, rawLine) in text.split(
+                separator: "\n",
+                omittingEmptySubsequences: false
+            ).enumerated() {
+                let line = String(rawLine)
+                guard line.contains(query) else { continue }
+                let boundedLine = line.count > maximumSearchLineCharacters
+                    ? String(line.prefix(maximumSearchLineCharacters))
+                    : line
+                matches.append("\(relativePath):\(index + 1): \(boundedLine)")
+                guard matches.count <= maximumSearchMatches else {
+                    throw BuiltInContextError.totalTooLarge
+                }
+            }
+        }
+        let text = matches.isEmpty ? "" : matches.joined(separator: "\n") + "\n"
+        guard text.utf8.count <= maximumFileBytes else {
+            throw BuiltInContextError.totalTooLarge
+        }
+        return BuiltInContextFile(relativePath: "[search: \(query)]", text: text)
+    }
+
+    private static func regularFilePaths(root: URL, secret: String) throws -> [String] {
+        var paths: [String] = []
+        try collectFiles(
+            root: root,
+            directory: root,
+            relativeDirectory: "",
+            depth: 0,
+            secret: secret,
+            paths: &paths
+        )
+        return paths.sorted()
+    }
+
+    private static func collectFiles(
+        root: URL,
+        directory: URL,
+        relativeDirectory: String,
+        depth: Int,
+        secret: String,
+        paths: inout [String]
+    ) throws {
+        guard depth <= maximumDepth else {
+            throw BuiltInContextError.totalTooLarge
+        }
+        let entries: [URL]
+        do {
+            entries = try FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
+                options: []
+            )
+        } catch {
+            throw BuiltInContextError.unreadable
+        }
+        for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let values: URLResourceValues
+            do {
+                values = try entry.resourceValues(forKeys: [
+                    .isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey
+                ])
+            } catch {
+                throw BuiltInContextError.unreadable
+            }
+            if values.isSymbolicLink == true {
+                throw BuiltInContextError.symbolicLink
+            }
+            let relativePath = relativeDirectory.isEmpty
+                ? entry.lastPathComponent
+                : relativeDirectory + "/" + entry.lastPathComponent
+            if !secret.isEmpty && relativePath.contains(secret) {
+                throw BuiltInContextError.secretInContext
+            }
+            if values.isDirectory == true {
+                try collectFiles(
+                    root: root,
+                    directory: entry,
+                    relativeDirectory: relativePath,
+                    depth: depth + 1,
+                    secret: secret,
+                    paths: &paths
+                )
+            } else if values.isRegularFile == true {
+                paths.append(relativePath)
+                guard paths.count <= maximumListedFiles else {
+                    throw BuiltInContextError.totalTooLarge
+                }
+            } else {
+                throw BuiltInContextError.notRegularFile
+            }
+            let resolved = entry.resolvingSymlinksInPath().standardizedFileURL
+            guard resolved.path == entry.standardizedFileURL.path,
+                  resolved.path.hasPrefix(root.path + "/") else {
+                throw BuiltInContextError.outsideRoot
+            }
+        }
+    }
+
+    private static func searchText(
+        root: URL,
+        relativePath: String,
+        secret: String
+    ) throws -> String? {
+        let components = try validatedComponents(relativePath)
+        var current = root
+        for component in components {
+            current.appendPathComponent(component)
+        }
+        let values: URLResourceValues
+        do {
+            values = try current.resourceValues(forKeys: [
+                .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey
+            ])
+        } catch {
+            throw BuiltInContextError.unreadable
+        }
+        if values.isSymbolicLink == true {
+            throw BuiltInContextError.symbolicLink
+        }
+        guard values.isRegularFile == true else {
+            throw BuiltInContextError.notRegularFile
+        }
+        if let size = values.fileSize, size > maximumSearchFileBytes {
+            return nil
+        }
+        let data: Data
+        do {
+            let handle = try FileHandle(forReadingFrom: current)
+            defer { try? handle.close() }
+            data = try handle.read(upToCount: maximumSearchFileBytes + 1) ?? Data()
+        } catch {
+            throw BuiltInContextError.unreadable
+        }
+        if data.count > maximumSearchFileBytes {
+            return nil
+        }
+        guard let text = String(data: data, encoding: .utf8), !isBinary(text) else {
+            return nil
+        }
+        if !secret.isEmpty && text.contains(secret) {
+            throw BuiltInContextError.secretInContext
+        }
+        return text
     }
 
     private static func canonicalDirectory(_ root: URL) throws -> URL {

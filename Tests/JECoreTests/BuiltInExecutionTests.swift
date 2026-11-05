@@ -299,6 +299,82 @@ final class BuiltInExecutionTests: XCTestCase {
         XCTAssertEqual(transport.callCount, 0)
     }
 
+    func testContextLoaderListsFilesSortedInsideRoot() throws {
+        let root = try makeContextRoot()
+        let section = try BuiltInContextLoader.list(root: root, secret: secret)
+        XCTAssertEqual(section.relativePath, "[file list]")
+        XCTAssertEqual(section.text, "docs/guide.txt\nnotes.txt\n")
+    }
+
+    func testContextLoaderSearchReturnsMatchingLinesOnly() throws {
+        let root = try makeContextRoot()
+        try Data("alpha line\ngamma needle line\nomega needle\n".utf8)
+            .write(to: root.appendingPathComponent("search.txt"))
+        let section = try BuiltInContextLoader.search(
+            root: root,
+            query: "needle",
+            secret: secret
+        )
+        XCTAssertEqual(section.relativePath, "[search: needle]")
+        XCTAssertEqual(
+            section.text,
+            "search.txt:2: gamma needle line\nsearch.txt:3: omega needle\n"
+        )
+    }
+
+    func testContextLoaderSearchRejectsSecretQueryAndSymlinkedFiles() throws {
+        let root = try makeContextRoot()
+        XCTAssertThrowsError(
+            try BuiltInContextLoader.search(root: root, query: secret, secret: secret)
+        ) { error in
+            XCTAssertEqual(error as? BuiltInContextError, .secretInContext)
+        }
+        let outside = temporary.appendingPathComponent("outside-search.txt")
+        try Data("needle outside\n".utf8).write(to: outside)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("linked.txt"),
+            withDestinationURL: outside
+        )
+        XCTAssertThrowsError(
+            try BuiltInContextLoader.search(root: root, query: "needle", secret: secret)
+        ) { error in
+            XCTAssertEqual(error as? BuiltInContextError, .symbolicLink)
+        }
+        XCTAssertThrowsError(
+            try BuiltInContextLoader.list(root: root, secret: secret)
+        ) { error in
+            XCTAssertEqual(error as? BuiltInContextError, .symbolicLink)
+        }
+    }
+
+    func testAskSingleStepWithListAndSearchContextReturnsAnswer() throws {
+        try publish(candidate())
+        try saveOllamaProfile()
+        let root = try makeContextRoot()
+        try Data("alpha line\ngamma needle line\n".utf8)
+            .write(to: root.appendingPathComponent("search.txt"))
+        let transport = FakeTransport(response: successResponse())
+        let result = JECommandLine.run(
+            ["--state-dir", stateDirectory.path, "ask", "--person", "alice", "--role", "fast",
+             "--single-step", "--context-root", root.path, "--context-list",
+             "--context-search", "needle", "--json", "--", prompt],
+            environment: [:],
+            recordedDay: "2026-11-04",
+            runID: "run-builtin-list-search",
+            secretStore: fakeSecrets,
+            builtInTransport: transport
+        )
+        XCTAssertEqual(result.code, 0, result.stderr)
+        let decoded = try JSONDecoder().decode(AskResult.self, from: Data(result.stdout.utf8))
+        XCTAssertEqual(decoded.answer, answer)
+        let body = String(decoding: try XCTUnwrap(transport.body), as: UTF8.self)
+        XCTAssertTrue(body.contains("[file list]"))
+        XCTAssertTrue(body.contains("search.txt:2: gamma needle line"))
+        let ledger = try String(contentsOf: ledgerURL, encoding: .utf8)
+        XCTAssertFalse(ledger.contains("gamma needle line"))
+        XCTAssertFalse(ledger.contains(prompt))
+    }
+
     private func makeContextRoot() throws -> URL {
         let root = temporary.appendingPathComponent("context-root", isDirectory: true)
         try FileManager.default.createDirectory(
