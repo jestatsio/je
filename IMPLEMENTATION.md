@@ -63,6 +63,13 @@ foundation slice, not a claim that the launch platform is complete.
   gateway model listing check with the saved key. With `--probe` it also
   runs the bounded Responses and Messages protocol checks from the Python
   client and writes a private report under `reports/` in the state directory.
+- Bare `je doctor` prints a local health overview (also `--json`): version,
+  machine, saved profiles with secret-storage kind, published assignments,
+  support-matrix totals, discovered harness executables, usage summary, and
+  warnings for embedded credentials, unloadable profiles, dangling
+  assignment references, and missing executables. It never resolves secret
+  values, contacts a service, or runs inference, and exits 1 when warnings
+  are present.
 - `je credential --profile NAME` prints the saved gateway key for a desktop
   credential helper, matching the Python client. It resolves embedded
   legacy keys and native secret references through the gateway profile

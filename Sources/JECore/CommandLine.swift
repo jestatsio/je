@@ -217,6 +217,16 @@ public enum JECommandLine {
         gatewayTransport: BoundedHTTPTransport?,
         gatewayProbeTransport: GatewayProbeTransport?
     ) -> CLIResult {
+        if arguments == ["doctor"] || arguments == ["doctor", "--json"] {
+            return doctorOverview(
+                json: arguments.count == 2,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment
+            )
+        }
         guard arguments.count >= 2 else { return invalid() }
         guard arguments[1] == "muse" else {
             return gatewayDoctor(
@@ -353,6 +363,27 @@ public enum JECommandLine {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "The gateway connection could not be checked.\n")
+        }
+    }
+
+    private static func doctorOverview(
+        json: Bool,
+        stateDirectory: URL,
+        environment: [String: String]
+    ) -> CLIResult {
+        do {
+            let report = try DoctorOverviewBuilder.build(
+                stateDirectory: stateDirectory,
+                environment: environment)
+            let code: Int32 = report.healthy ? 0 : 1
+            if json {
+                return CLIResult(code: code, stdout: try StableJSON.encode(report))
+            }
+            return CLIResult(code: code, stdout: DoctorOverviewRenderer.render(report))
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The local health overview could not be built.\n")
         }
     }
 
@@ -583,7 +614,7 @@ public enum JECommandLine {
         }
     }
 
-    private static func resolveOllamaExecutable(
+    static func resolveOllamaExecutable(
         override: String?, environment: [String: String]
     ) -> URL? {
         let fileManager = FileManager.default
@@ -615,7 +646,7 @@ public enum JECommandLine {
         return fileManager.isExecutableFile(atPath: path)
     }
 
-    private static func searchExecutableOnPath(
+    static func searchExecutableOnPath(
         named name: String, environment: [String: String]
     ) -> URL? {
         for directory in (environment["PATH"] ?? "").split(separator: ":") where !directory.isEmpty {
@@ -734,6 +765,7 @@ public enum JECommandLine {
       status [--json]          Show native core and support status
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
+      doctor [--json]          Show a local health overview without contacting a service
       doctor muse [--json]     Probe public Muse local-contract signals without inference
       doctor --profile NAME    Check a gateway key and model without inference
       credential --profile NAME Supply a saved key to a desktop credential helper

@@ -60,6 +60,11 @@ public struct PublicOllamaProfile: Codable, Equatable, Sendable {
     public let model: String
 }
 
+public enum ProfileSecretStorage: String, Codable, Equatable, Sendable {
+    case embeddedLegacy = "embedded_legacy"
+    case secretReference = "secret_reference"
+}
+
 private struct LegacyMemoryProfile {
     let endpoint: String
     let secret: String?
@@ -189,6 +194,10 @@ public struct ProfileStore: Sendable {
 
     public func loadPublicProfile(name: String) throws -> PublicConnectionProfile {
         try loadLegacyProfile(name: name).publicProfile(name: name)
+    }
+
+    public func gatewaySecretStorage(name: String) throws -> ProfileSecretStorage {
+        try loadLegacyProfile(name: name).secret != nil ? .embeddedLegacy : .secretReference
     }
 
     public func loadResolvedProfile(
@@ -517,6 +526,10 @@ public struct ProfileStore: Sendable {
         try loadLegacyMemoryProfile(name: name).publicProfile(name: name)
     }
 
+    public func memorySecretStorage(name: String) throws -> ProfileSecretStorage {
+        try loadLegacyMemoryProfile(name: name).secret != nil ? .embeddedLegacy : .secretReference
+    }
+
     public func loadResolvedMemoryProfile(
         name: String,
         secretStore: SecretStoring
@@ -628,6 +641,10 @@ public struct ProfileStore: Sendable {
 
     public func loadPublicOllamaProfile(name: String) throws -> PublicOllamaProfile {
         try loadLegacyOllamaProfile(name: name).publicProfile(name: name)
+    }
+
+    public func ollamaSecretStorage(name: String) throws -> ProfileSecretStorage {
+        try loadLegacyOllamaProfile(name: name).secret != nil ? .embeddedLegacy : .secretReference
     }
 
     public func loadResolvedOllamaProfile(
