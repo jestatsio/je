@@ -17,6 +17,31 @@ public struct QualificationCheck: Codable, Equatable, Sendable {
     }
 }
 
+public struct QualificationTaskResult: Codable, Equatable, Sendable {
+    public let taskID: String
+    public let status: QualificationCheckStatus
+    public let detailCode: String
+    public let outputSHA256: String?
+    public let harnessExitCode: Int32?
+    public let durationMs: Int64?
+
+    public init(
+        taskID: String,
+        status: QualificationCheckStatus,
+        detailCode: String,
+        outputSHA256: String? = nil,
+        harnessExitCode: Int32? = nil,
+        durationMs: Int64? = nil
+    ) {
+        self.taskID = taskID
+        self.status = status
+        self.detailCode = detailCode
+        self.outputSHA256 = outputSHA256
+        self.harnessExitCode = harnessExitCode
+        self.durationMs = durationMs
+    }
+}
+
 public struct QualificationEvidenceRecord: Codable, Equatable, Sendable {
     public let schemaVersion: Int
     public let evidenceReference: String
@@ -26,9 +51,72 @@ public struct QualificationEvidenceRecord: Codable, Equatable, Sendable {
     public let checks: [QualificationCheck]
     public let overallResult: String
     public let taskID: String
+    public let taskResults: [QualificationTaskResult]
     public let taskOutputSHA256: String?
     public let harnessExitCode: Int32?
     public let durationMs: Int64?
+
+    public init(
+        schemaVersion: Int,
+        evidenceReference: String,
+        recordedDay: String,
+        producerVersion: String,
+        candidate: RouteCandidate,
+        checks: [QualificationCheck],
+        overallResult: String,
+        taskID: String,
+        taskResults: [QualificationTaskResult] = [],
+        taskOutputSHA256: String?,
+        harnessExitCode: Int32?,
+        durationMs: Int64?
+    ) {
+        self.schemaVersion = schemaVersion
+        self.evidenceReference = evidenceReference
+        self.recordedDay = recordedDay
+        self.producerVersion = producerVersion
+        self.candidate = candidate
+        self.checks = checks
+        self.overallResult = overallResult
+        self.taskID = taskID
+        self.taskResults = taskResults
+        self.taskOutputSHA256 = taskOutputSHA256
+        self.harnessExitCode = harnessExitCode
+        self.durationMs = durationMs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case evidenceReference
+        case recordedDay
+        case producerVersion
+        case candidate
+        case checks
+        case overallResult
+        case taskID
+        case taskResults
+        case taskOutputSHA256
+        case harnessExitCode
+        case durationMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        evidenceReference = try container.decode(String.self, forKey: .evidenceReference)
+        recordedDay = try container.decode(String.self, forKey: .recordedDay)
+        producerVersion = try container.decode(String.self, forKey: .producerVersion)
+        candidate = try container.decode(RouteCandidate.self, forKey: .candidate)
+        checks = try container.decode([QualificationCheck].self, forKey: .checks)
+        overallResult = try container.decode(String.self, forKey: .overallResult)
+        taskID = try container.decode(String.self, forKey: .taskID)
+        taskResults = try container.decodeIfPresent(
+            [QualificationTaskResult].self,
+            forKey: .taskResults
+        ) ?? []
+        taskOutputSHA256 = try container.decodeIfPresent(String.self, forKey: .taskOutputSHA256)
+        harnessExitCode = try container.decodeIfPresent(Int32.self, forKey: .harnessExitCode)
+        durationMs = try container.decodeIfPresent(Int64.self, forKey: .durationMs)
+    }
 
     public var passed: Bool {
         overallResult == "bounded_task_passed" && checks.allSatisfy { $0.status == .passed }
@@ -44,6 +132,7 @@ public struct QualificationEvidenceRecord: Codable, Equatable, Sendable {
             checks: checks,
             overallResult: overallResult,
             taskID: taskID,
+            taskResults: taskResults,
             taskOutputSHA256: taskOutputSHA256,
             harnessExitCode: harnessExitCode,
             durationMs: durationMs
@@ -52,8 +141,40 @@ public struct QualificationEvidenceRecord: Codable, Equatable, Sendable {
 
     public static func reference(for record: QualificationEvidenceRecord) -> String {
         let payload = record.withReference("")
-        let data = (try? StableJSON.encodeLine(payload)) ?? Data()
+        let data: Data
+        if record.schemaVersion == 1 {
+            let legacy = ReferencePayloadV1(
+                schemaVersion: payload.schemaVersion,
+                evidenceReference: payload.evidenceReference,
+                recordedDay: payload.recordedDay,
+                producerVersion: payload.producerVersion,
+                candidate: payload.candidate,
+                checks: payload.checks,
+                overallResult: payload.overallResult,
+                taskID: payload.taskID,
+                taskOutputSHA256: payload.taskOutputSHA256,
+                harnessExitCode: payload.harnessExitCode,
+                durationMs: payload.durationMs
+            )
+            data = (try? StableJSON.encodeLine(legacy)) ?? Data()
+        } else {
+            data = (try? StableJSON.encodeLine(payload)) ?? Data()
+        }
         return "evidence:qualification:" + SHA256.hexDigest(data)
+    }
+
+    private struct ReferencePayloadV1: Encodable {
+        let schemaVersion: Int
+        let evidenceReference: String
+        let recordedDay: String
+        let producerVersion: String
+        let candidate: RouteCandidate
+        let checks: [QualificationCheck]
+        let overallResult: String
+        let taskID: String
+        let taskOutputSHA256: String?
+        let harnessExitCode: Int32?
+        let durationMs: Int64?
     }
 }
 
@@ -251,8 +372,7 @@ public struct QualificationEvidenceProducer: Sendable {
             }
             checks.append(check("connection_profile", passed: false, detail: "not_applicable"))
             checks.append(check("secret_resolution", passed: false, detail: "not_applicable"))
-            checks.append(check("launch_preparation", passed: false, detail: "unsupported_harness"))
-            checks.append(check("bounded_task", passed: false, detail: "unsupported_harness"))
+            appendSuiteFailures(to: &checks, launchDetail: "unsupported_harness", taskDetail: "unsupported_harness")
             return record(
                 candidate: candidate,
                 checks: checks,
@@ -265,8 +385,7 @@ public struct QualificationEvidenceProducer: Sendable {
         if candidate.harness == .builtIn {
             checks.append(check("connection_profile", passed: false, detail: "not_applicable"))
             checks.append(check("secret_resolution", passed: false, detail: "not_applicable"))
-            checks.append(check("launch_preparation", passed: false, detail: "unsupported_harness"))
-            checks.append(check("bounded_task", passed: false, detail: "unsupported_harness"))
+            appendSuiteFailures(to: &checks, launchDetail: "unsupported_harness", taskDetail: "unsupported_harness")
             return record(
                 candidate: candidate,
                 checks: checks,
@@ -279,8 +398,7 @@ public struct QualificationEvidenceProducer: Sendable {
         guard let profileName = candidate.connectionProfileName else {
             checks.append(check("connection_profile", passed: false, detail: "missing"))
             checks.append(check("secret_resolution", passed: false, detail: "missing_profile"))
-            checks.append(check("launch_preparation", passed: false, detail: "missing_profile"))
-            checks.append(check("bounded_task", passed: false, detail: "missing_profile"))
+            appendSuiteFailures(to: &checks, launchDetail: "missing_profile", taskDetail: "missing_profile")
             return record(
                 candidate: candidate,
                 checks: checks,
@@ -299,8 +417,7 @@ public struct QualificationEvidenceProducer: Sendable {
         } catch {
             checks.append(check("connection_profile", passed: false, detail: "load_failed"))
             checks.append(check("secret_resolution", passed: false, detail: "load_failed"))
-            checks.append(check("launch_preparation", passed: false, detail: "load_failed"))
-            checks.append(check("bounded_task", passed: false, detail: "load_failed"))
+            appendSuiteFailures(to: &checks, launchDetail: "load_failed", taskDetail: "load_failed")
             return record(
                 candidate: candidate,
                 checks: checks,
@@ -311,8 +428,7 @@ public struct QualificationEvidenceProducer: Sendable {
         }
 
         guard candidate.launchMode == .headless else {
-            checks.append(check("launch_preparation", passed: false, detail: "headless_task_required"))
-            checks.append(check("bounded_task", passed: false, detail: "headless_task_required"))
+            appendSuiteFailures(to: &checks, launchDetail: "headless_task_required", taskDetail: "headless_task_required")
             return record(
                 candidate: candidate,
                 checks: checks,
@@ -322,79 +438,131 @@ public struct QualificationEvidenceProducer: Sendable {
             )
         }
 
-        let workspace = FileManager.default.temporaryDirectory
+        let suiteRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("je-qualification-" + UUID().uuidString.lowercased(), isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: workspace) }
+        defer { try? FileManager.default.removeItem(at: suiteRoot) }
+
+        var taskResults: [QualificationTaskResult] = []
+        var taskChecks: [QualificationCheck] = []
+        var preparationPassed = true
+        var totalDuration: Int64 = 0
         do {
             try FileManager.default.createDirectory(
-                at: workspace,
+                at: suiteRoot,
                 withIntermediateDirectories: false,
                 attributes: [.posixPermissions: 0o700]
             )
-            let marker = "JE-QUALIFICATION-" + UUID().uuidString.lowercased()
-            let input = workspace.appendingPathComponent("input.txt")
-            guard FileManager.default.createFile(
-                atPath: input.path,
-                contents: Data((marker + "\n").utf8),
-                attributes: [.posixPermissions: 0o600]
-            ) else {
-                throw HarnessLaunchError.preparationFailed
-            }
-            let prepared = try HarnessLaunchPreparer().prepare(
-                candidate: candidate,
-                profile: profile,
-                prompt: "Read input.txt and write its exact contents to output.txt. Do not modify input.txt.",
-                environment: environment,
-                executableOverride: executableOverride,
-                currentDirectoryURL: workspace
-            )
-            checks.append(check("launch_preparation", passed: true, detail: "prepared"))
-            let started = Date()
-            do {
-                harnessExitCode = try harnessRunner.run(prepared.spec)
-            } catch {
-                harnessExitCode = nil
-            }
-            prepared.cleanup()
-            durationMs = Int64(max(0, Date().timeIntervalSince(started) * 1000).rounded())
-
-            let outputURL = workspace.appendingPathComponent("output.txt")
-            let inputAfter = try? Data(contentsOf: input)
-            let output = try? Data(contentsOf: outputURL)
-            if let output {
-                outputDigest = SHA256.hexDigest(output)
-            }
-            let outputText = output.flatMap { String(data: $0, encoding: .utf8) }
-            let taskPassed = harnessExitCode == 0
-                && inputAfter == Data((marker + "\n").utf8)
-                && (output?.count ?? Int.max) <= 64 * 1024
-                && outputText?.trimmingCharacters(in: .whitespacesAndNewlines) == marker
-            let detail: String
-            if taskPassed {
-                detail = "exact_output_verified"
-            } else if harnessExitCode == nil {
-                detail = "launch_failed"
-            } else if harnessExitCode != 0 {
-                detail = "nonzero_exit"
-            } else {
-                detail = "output_mismatch"
-            }
-            checks.append(check("bounded_task", passed: taskPassed, detail: detail))
-        } catch let error as HarnessLaunchError {
-            checks.append(check(
-                "launch_preparation",
-                passed: false,
-                detail: detailCode(for: error)
-            ))
-            checks.append(check("bounded_task", passed: false, detail: "preparation_failed"))
         } catch {
-            checks.append(check("launch_preparation", passed: false, detail: "preparation_failed"))
-            checks.append(check("bounded_task", passed: false, detail: "preparation_failed"))
+            appendSuiteFailures(to: &checks, launchDetail: "preparation_failed", taskDetail: "preparation_failed")
+            return record(
+                candidate: candidate,
+                checks: checks,
+                outputDigest: nil,
+                harnessExitCode: nil,
+                durationMs: nil
+            )
         }
+
+        for definition in taskDefinitions() {
+            let taskDirectory = suiteRoot.appendingPathComponent(definition.directoryName, isDirectory: true)
+            var taskExit: Int32?
+            var taskDuration: Int64?
+            var taskOutputDigest: String?
+            let taskPassed: Bool
+            let taskDetail: String
+            do {
+                try FileManager.default.createDirectory(
+                    at: taskDirectory,
+                    withIntermediateDirectories: false,
+                    attributes: [.posixPermissions: 0o700]
+                )
+                for name in definition.files.keys.sorted() {
+                    guard let contents = definition.files[name],
+                          FileManager.default.createFile(
+                            atPath: taskDirectory.appendingPathComponent(name).path,
+                            contents: contents,
+                            attributes: [.posixPermissions: 0o600]
+                          ) else {
+                        throw HarnessLaunchError.preparationFailed
+                    }
+                }
+                let prepared = try HarnessLaunchPreparer().prepare(
+                    candidate: candidate,
+                    profile: profile,
+                    prompt: definition.prompt,
+                    environment: environment,
+                    executableOverride: executableOverride,
+                    currentDirectoryURL: taskDirectory
+                )
+                let started = Date()
+                do {
+                    taskExit = try harnessRunner.run(prepared.spec)
+                } catch {
+                    taskExit = nil
+                }
+                prepared.cleanup()
+                taskDuration = Int64(max(0, Date().timeIntervalSince(started) * 1000).rounded())
+                totalDuration += taskDuration ?? 0
+
+                let output = try? Data(contentsOf: taskDirectory.appendingPathComponent(definition.outputName))
+                if let output {
+                    taskOutputDigest = SHA256.hexDigest(output)
+                }
+                let outputText = output.flatMap { String(data: $0, encoding: .utf8) }
+                let unchanged = definition.unchangedFiles.allSatisfy { name, expected in
+                    (try? Data(contentsOf: taskDirectory.appendingPathComponent(name))) == expected
+                }
+                taskPassed = taskExit == 0
+                    && unchanged
+                    && (output?.count ?? Int.max) <= 64 * 1024
+                    && outputText?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        == definition.expectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if taskPassed {
+                    taskDetail = "exact_output_verified"
+                } else if taskExit == nil {
+                    taskDetail = "launch_failed"
+                } else if taskExit != 0 {
+                    taskDetail = "nonzero_exit"
+                } else {
+                    taskDetail = "output_mismatch"
+                }
+            } catch let error as HarnessLaunchError {
+                preparationPassed = false
+                taskPassed = false
+                taskDetail = detailCode(for: error)
+            } catch {
+                preparationPassed = false
+                taskPassed = false
+                taskDetail = "preparation_failed"
+            }
+            taskResults.append(QualificationTaskResult(
+                taskID: definition.id,
+                status: taskPassed ? .passed : .failed,
+                detailCode: taskDetail,
+                outputSHA256: taskOutputDigest,
+                harnessExitCode: taskExit,
+                durationMs: taskDuration
+            ))
+            taskChecks.append(check("task:" + definition.id, passed: taskPassed, detail: taskDetail))
+        }
+
+        checks.append(check(
+            "launch_preparation",
+            passed: preparationPassed,
+            detail: preparationPassed ? "prepared" : "preparation_failed"
+        ))
+        checks.append(contentsOf: taskChecks)
+        let digests = taskResults.compactMap(\.outputSHA256)
+        outputDigest = digests.count == taskResults.count
+            ? SHA256.hexDigest(Data(digests.joined(separator: "\n").utf8))
+            : nil
+        harnessExitCode = aggregateExitCode(taskResults)
+        durationMs = totalDuration
 
         return record(
             candidate: candidate,
             checks: checks,
+            taskResults: taskResults,
             outputDigest: outputDigest,
             harnessExitCode: harnessExitCode,
             durationMs: durationMs
@@ -404,25 +572,134 @@ public struct QualificationEvidenceProducer: Sendable {
     private func record(
         candidate: RouteCandidate,
         checks: [QualificationCheck],
+        taskResults: [QualificationTaskResult] = [],
         outputDigest: String?,
         harnessExitCode: Int32?,
         durationMs: Int64?
     ) -> QualificationEvidenceRecord {
         let passed = checks.allSatisfy { $0.status == .passed }
         let draft = QualificationEvidenceRecord(
-            schemaVersion: 1,
+            schemaVersion: 2,
             evidenceReference: "",
             recordedDay: recordedDay,
             producerVersion: JEVersion.current,
             candidate: candidate,
             checks: checks,
             overallResult: passed ? "bounded_task_passed" : "bounded_task_failed",
-            taskID: "copy-input-to-output-v1",
+            taskID: "bounded-file-tasks-v2",
+            taskResults: taskResults,
             taskOutputSHA256: outputDigest,
             harnessExitCode: harnessExitCode,
             durationMs: durationMs
         )
         return draft.withReference(QualificationEvidenceRecord.reference(for: draft))
+    }
+
+    private static let suiteTaskIDs = [
+        "copy-input-to-output-v1",
+        "extract-key-value-v1",
+        "select-matching-lines-v1",
+        "replace-placeholder-v1"
+    ]
+
+    private func appendSuiteFailures(
+        to checks: inout [QualificationCheck],
+        launchDetail: String,
+        taskDetail: String
+    ) {
+        checks.append(check("launch_preparation", passed: false, detail: launchDetail))
+        for id in Self.suiteTaskIDs {
+            checks.append(check("task:" + id, passed: false, detail: taskDetail))
+        }
+    }
+
+    private struct TaskDefinition {
+        let id: String
+        let directoryName: String
+        let prompt: String
+        let files: [String: Data]
+        let outputName: String
+        let expectedText: String
+        let unchangedFiles: [String: Data]
+    }
+
+    private func taskDefinitions() -> [TaskDefinition] {
+        let copyMarker = "JE-QUALIFICATION-" + UUID().uuidString.lowercased()
+        let copyInput = Data((copyMarker + "\n").utf8)
+
+        let answerValue = "VALUE-" + UUID().uuidString.lowercased()
+        let spec = Data((
+            "decoy_a=VALUE-" + UUID().uuidString.lowercased() + "\n"
+                + "answer_key=" + answerValue + "\n"
+                + "decoy_b=VALUE-" + UUID().uuidString.lowercased() + "\n"
+        ).utf8)
+
+        let needle = "NEEDLE-" + UUID().uuidString.lowercased()
+        let selectedFirst = needle + " first " + UUID().uuidString.lowercased()
+        let selectedSecond = needle + " second " + UUID().uuidString.lowercased()
+        let lines = Data([
+            "alpha " + UUID().uuidString.lowercased(),
+            selectedFirst,
+            "beta " + UUID().uuidString.lowercased(),
+            selectedSecond,
+            "gamma " + UUID().uuidString.lowercased()
+        ].joined(separator: "\n").appending("\n").utf8)
+
+        let replacement = "REPLACEMENT-" + UUID().uuidString.lowercased()
+        let keepLine = "Keep: " + UUID().uuidString.lowercased()
+        let notes = Data(("Status: <TOKEN>\n" + keepLine + "\n").utf8)
+        let replacementData = Data((replacement + "\n").utf8)
+        let expectedNotes = "Status: " + replacement + "\n" + keepLine
+
+        return [
+            TaskDefinition(
+                id: Self.suiteTaskIDs[0],
+                directoryName: "copy",
+                prompt: "Read input.txt and write its exact contents to output.txt. Do not modify input.txt.",
+                files: ["input.txt": copyInput],
+                outputName: "output.txt",
+                expectedText: copyMarker,
+                unchangedFiles: ["input.txt": copyInput]
+            ),
+            TaskDefinition(
+                id: Self.suiteTaskIDs[1],
+                directoryName: "extract",
+                prompt: "Read spec.txt. Write only the value assigned to answer_key, followed by a newline, to answer.txt. Do not modify spec.txt.",
+                files: ["spec.txt": spec],
+                outputName: "answer.txt",
+                expectedText: answerValue,
+                unchangedFiles: ["spec.txt": spec]
+            ),
+            TaskDefinition(
+                id: Self.suiteTaskIDs[2],
+                directoryName: "select",
+                prompt: "Read lines.txt. Write every line containing \"\(needle)\" to selected.txt, preserving order. Do not modify lines.txt.",
+                files: ["lines.txt": lines],
+                outputName: "selected.txt",
+                expectedText: selectedFirst + "\n" + selectedSecond,
+                unchangedFiles: ["lines.txt": lines]
+            ),
+            TaskDefinition(
+                id: Self.suiteTaskIDs[3],
+                directoryName: "replace",
+                prompt: "Replace the exact text <TOKEN> in notes.txt with the trimmed contents of replacement.txt. Save notes.txt and do not modify replacement.txt.",
+                files: [
+                    "notes.txt": notes,
+                    "replacement.txt": replacementData
+                ],
+                outputName: "notes.txt",
+                expectedText: expectedNotes,
+                unchangedFiles: ["replacement.txt": replacementData]
+            )
+        ]
+    }
+
+    private func aggregateExitCode(_ results: [QualificationTaskResult]) -> Int32? {
+        for result in results {
+            guard let code = result.harnessExitCode else { return nil }
+            if code != 0 { return code }
+        }
+        return results.isEmpty ? nil : 0
     }
 
     private func check(_ id: String, passed: Bool, detail: String) -> QualificationCheck {

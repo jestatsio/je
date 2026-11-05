@@ -46,7 +46,11 @@ final class QualificationEvidenceTests: XCTestCase {
         XCTAssertEqual(records.count, 1)
         let record = try XCTUnwrap(records.first)
         XCTAssertTrue(record.passed)
-        XCTAssertEqual(record.taskID, "copy-input-to-output-v1")
+        XCTAssertEqual(record.schemaVersion, 2)
+        XCTAssertEqual(record.taskID, "bounded-file-tasks-v2")
+        XCTAssertEqual(record.taskResults.count, 4)
+        XCTAssertTrue(record.taskResults.allSatisfy { $0.status == .passed })
+        XCTAssertTrue(record.taskResults.allSatisfy { $0.outputSHA256 != nil })
         XCTAssertNotNil(record.taskOutputSHA256)
         XCTAssertEqual(record.harnessExitCode, 0)
         XCTAssertTrue(record.evidenceReference.hasPrefix("evidence:qualification:"))
@@ -56,6 +60,9 @@ final class QualificationEvidenceTests: XCTestCase {
         let text = try String(contentsOf: file, encoding: .utf8)
         XCTAssertFalse(text.contains(secret))
         XCTAssertFalse(text.contains("JE-QUALIFICATION-"))
+        XCTAssertFalse(text.contains("NEEDLE-"))
+        XCTAssertFalse(text.contains("VALUE-"))
+        XCTAssertEqual(runner.specs.count, 4)
         let spec = try XCTUnwrap(runner.spec)
         XCTAssertNotNil(spec.currentDirectoryURL)
         XCTAssertFalse(spec.arguments.joined(separator: "\n").contains(secret))
@@ -99,6 +106,29 @@ final class QualificationEvidenceTests: XCTestCase {
         XCTAssertFalse(record.passed)
         XCTAssertEqual(record.harnessExitCode, 7)
         XCTAssertEqual(record.checks.last?.detailCode, "nonzero_exit")
+        XCTAssertEqual(
+            try AssignmentRegistry(directory: stateDirectory).loadCandidates().first?.qualificationStatus,
+            .planned
+        )
+    }
+
+    func testOneWrongSuiteTaskFailsOverallButOtherTasksStillRun() throws {
+        try publish(candidate(id: "fast-codex"))
+        let executable = try writeExecutable()
+        let runner = CopyTaskRunner(exitCode: 0, wrongSelectedLines: true)
+
+        let result = runQualify(
+            id: "fast-codex",
+            executable: executable,
+            runner: runner,
+            markQualified: true
+        )
+        XCTAssertEqual(result.code, 2)
+        XCTAssertEqual(runner.specs.count, 4)
+        let record = try XCTUnwrap(evidenceRecords().first)
+        XCTAssertFalse(record.passed)
+        XCTAssertEqual(record.taskResults.map(\.status), [.passed, .passed, .failed, .passed])
+        XCTAssertEqual(record.taskResults[2].detailCode, "output_mismatch")
         XCTAssertEqual(
             try AssignmentRegistry(directory: stateDirectory).loadCandidates().first?.qualificationStatus,
             .planned
@@ -224,23 +254,66 @@ final class QualificationEvidenceTests: XCTestCase {
 private final class CopyTaskRunner: HarnessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private let exitCode: Int32
-    private var capturedSpec: HarnessLaunchSpec?
+    private let wrongSelectedLines: Bool
+    private var capturedSpecs: [HarnessLaunchSpec] = []
 
-    init(exitCode: Int32) {
+    init(exitCode: Int32, wrongSelectedLines: Bool = false) {
         self.exitCode = exitCode
+        self.wrongSelectedLines = wrongSelectedLines
     }
 
     var spec: HarnessLaunchSpec? {
-        lock.withLock { capturedSpec }
+        lock.withLock { capturedSpecs.first }
+    }
+
+    var specs: [HarnessLaunchSpec] {
+        lock.withLock { capturedSpecs }
     }
 
     func run(_ spec: HarnessLaunchSpec) throws -> Int32 {
-        lock.withLock { capturedSpec = spec }
+        lock.withLock { capturedSpecs.append(spec) }
         guard exitCode == 0, let directory = spec.currentDirectoryURL else {
             return exitCode
         }
-        let input = try Data(contentsOf: directory.appendingPathComponent("input.txt"))
-        try input.write(to: directory.appendingPathComponent("output.txt"))
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: directory.appendingPathComponent("input.txt").path) {
+            let input = try Data(contentsOf: directory.appendingPathComponent("input.txt"))
+            try input.write(to: directory.appendingPathComponent("output.txt"))
+        } else if fileManager.fileExists(atPath: directory.appendingPathComponent("spec.txt").path) {
+            let specText = try String(
+                contentsOf: directory.appendingPathComponent("spec.txt"),
+                encoding: .utf8
+            )
+            let line = specText.split(separator: "\n").first { $0.hasPrefix("answer_key=") } ?? ""
+            let value = line.dropFirst("answer_key=".count)
+            try Data((String(value) + "\n").utf8)
+                .write(to: directory.appendingPathComponent("answer.txt"))
+        } else if fileManager.fileExists(atPath: directory.appendingPathComponent("lines.txt").path) {
+            let prompt = spec.arguments.last ?? ""
+            let quoted = prompt.split(separator: "\"")
+            let needle = quoted.count >= 2 ? String(quoted[1]) : ""
+            let lines = try String(
+                contentsOf: directory.appendingPathComponent("lines.txt"),
+                encoding: .utf8
+            ).split(separator: "\n").map(String.init)
+            var selected = lines.filter { $0.contains(needle) }
+            if wrongSelectedLines, !selected.isEmpty {
+                selected.removeLast()
+            }
+            try Data((selected.joined(separator: "\n") + "\n").utf8)
+                .write(to: directory.appendingPathComponent("selected.txt"))
+        } else if fileManager.fileExists(atPath: directory.appendingPathComponent("notes.txt").path) {
+            let notes = try String(
+                contentsOf: directory.appendingPathComponent("notes.txt"),
+                encoding: .utf8
+            )
+            let replacement = try String(
+                contentsOf: directory.appendingPathComponent("replacement.txt"),
+                encoding: .utf8
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            try Data(notes.replacingOccurrences(of: "<TOKEN>", with: replacement).utf8)
+                .write(to: directory.appendingPathComponent("notes.txt"))
+        }
         return exitCode
     }
 }
