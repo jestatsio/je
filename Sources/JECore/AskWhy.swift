@@ -13,6 +13,7 @@ public struct AskResult: Codable, Equatable, Sendable {
     public let usageTraceRecorded: Bool
     public let launchStatus: String
     public let harnessExitCode: Int32?
+    public let answer: String?
 }
 
 public enum AskWhyCommand {
@@ -28,7 +29,8 @@ public enum AskWhyCommand {
         secretStore: SecretStoring? = nil,
         harnessRunner: HarnessRunning? = nil,
         stdoutSink: CLIOutputSink? = nil,
-        musePhysicalMemoryBytes: UInt64? = nil
+        musePhysicalMemoryBytes: UInt64? = nil,
+        builtInTransport: BuiltInHTTPTransport? = nil
     ) -> CLIResult {
         guard command == "why" || command == "ask" else {
             return invalid()
@@ -38,6 +40,14 @@ public enum AskWhyCommand {
         }
         if command == "ask" && parsed.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return invalid()
+        }
+        if parsed.singleStep {
+            if let harness = parsed.harness, harness != .builtIn {
+                return invalid()
+            }
+            if parsed.executableOverride != nil {
+                return invalid()
+            }
         }
         guard let personID = parsed.personID ?? clean(environment["JE_PERSON_ID"]) else {
             return CLIResult(
@@ -52,15 +62,18 @@ public enum AskWhyCommand {
             )
         }
 
-        let candidates: [RouteCandidate]
+        let loadedCandidates: [RouteCandidate]
         do {
-            candidates = try AssignmentRegistry(directory: stateDirectory).loadCandidates()
+            loadedCandidates = try AssignmentRegistry(directory: stateDirectory).loadCandidates()
         } catch let error as StateStoreError {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "The assignment registry could not be read.\n")
         }
 
+        let candidates = parsed.singleStep
+            ? loadedCandidates.filter { $0.harness == .builtIn && $0.launchMode == .singleStep }
+            : loadedCandidates.filter { $0.harness != .builtIn }
         let request = RouteRequest(
             personID: personID,
             explicitRole: role,
@@ -101,7 +114,8 @@ public enum AskWhyCommand {
             secretStore: secretStore,
             harnessRunner: harnessRunner,
             stdoutSink: stdoutSink,
-            musePhysicalMemoryBytes: musePhysicalMemoryBytes
+            musePhysicalMemoryBytes: musePhysicalMemoryBytes,
+            builtInTransport: builtInTransport
         )
     }
 
@@ -115,7 +129,8 @@ public enum AskWhyCommand {
         secretStore: SecretStoring?,
         harnessRunner: HarnessRunning?,
         stdoutSink: CLIOutputSink?,
-        musePhysicalMemoryBytes: UInt64?
+        musePhysicalMemoryBytes: UInt64?,
+        builtInTransport: BuiltInHTTPTransport?
     ) -> CLIResult {
         guard let candidate = explanation.selectedCandidate else {
             let result = AskResult(
@@ -123,7 +138,8 @@ public enum AskWhyCommand {
                 runID: nil,
                 usageTraceRecorded: false,
                 launchStatus: "no_qualified_route",
-                harnessExitCode: nil
+                harnessExitCode: nil,
+                answer: nil
             )
             if parsed.json {
                 return encode(result, code: 2, stderr: "No qualified route is available for this request.\n")
@@ -140,9 +156,32 @@ public enum AskWhyCommand {
         var harnessExitCode: Int32?
         var launchStatus = "failed"
         var launchError: String?
+        var answerText: String?
         var emittedRoute = false
 
         do {
+            if candidate.harness == .builtIn {
+                guard parsed.singleStep else {
+                    throw BuiltInExecutionError.unsupportedRoute
+                }
+                guard let profileName = candidate.connectionProfileName else {
+                    throw BuiltInExecutionError.profileMismatch
+                }
+                let store = secretStore ?? ProcessSecretStore.default(environment: environment)
+                let profile = try ProfileStore(directory: stateDirectory)
+                    .loadResolvedOllamaProfile(name: profileName, secretStore: store)
+                if !parsed.json, let stdoutSink {
+                    stdoutSink(humanExplanation(explanation))
+                    emittedRoute = true
+                }
+                answerText = try BuiltInExecutor.execute(
+                    candidate: candidate,
+                    profile: profile,
+                    prompt: parsed.prompt,
+                    transport: builtInTransport ?? URLSessionBuiltInHTTPTransport()
+                )
+                launchStatus = "completed"
+            } else {
             let prepared: PreparedHarnessLaunch
             if HarnessLaunchPreparer.isMuseLocal(candidate) {
                 prepared = try HarnessLaunchPreparer().prepareMuseLocal(
@@ -175,6 +214,10 @@ public enum AskWhyCommand {
             harnessExitCode = try runner.run(prepared.spec)
             prepared.cleanup()
             launchStatus = harnessExitCode == 0 ? "completed" : "failed"
+            }
+        } catch let error as BuiltInExecutionError {
+            launchError = error.message
+            launchStatus = error.launchStatus
         } catch let error as HarnessLaunchError {
             launchError = error.message
             switch error {
@@ -230,19 +273,23 @@ public enum AskWhyCommand {
             runID: effectiveRunID,
             usageTraceRecorded: recorded,
             launchStatus: launchStatus,
-            harnessExitCode: harnessExitCode
+            harnessExitCode: harnessExitCode,
+            answer: answerText
         )
-        let resultCode = harnessExitCode ?? 2
+        let resultCode = launchStatus == "completed" ? 0 : (harnessExitCode ?? 2)
         let stderr = launchError.map { $0 + "\n" } ?? ""
         if parsed.json {
             return encode(result, code: resultCode, stderr: stderr)
         }
         let routeText = emittedRoute ? "" : humanExplanation(explanation)
+        let answerBlock = answerText.map { text in
+            text.hasSuffix("\n") ? text : text + "\n"
+        } ?? ""
         let traceLine = recorded ? "Usage trace: recorded.\n" : "Usage trace: not recorded.\n"
         let launchLine = "Launch: \(launchStatus).\n"
         return CLIResult(
             code: resultCode,
-            stdout: routeText + traceLine + launchLine,
+            stdout: routeText + answerBlock + traceLine + launchLine,
             stderr: stderr
         )
     }
@@ -321,6 +368,7 @@ public enum AskWhyCommand {
     private struct ParsedArguments {
         var json = false
         var neverCloud = false
+        var singleStep = false
         var personID: String?
         var role: ModelRole?
         var harness: HarnessKind?
@@ -347,6 +395,11 @@ public enum AskWhyCommand {
                 }
                 if argument == "--never-cloud" {
                     neverCloud = true
+                    index += 1
+                    continue
+                }
+                if argument == "--single-step" {
+                    singleStep = true
                     index += 1
                     continue
                 }

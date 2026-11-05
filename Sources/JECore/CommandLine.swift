@@ -30,7 +30,8 @@ public enum JECommandLine {
         stdoutSink: CLIOutputSink? = nil,
         musePhysicalMemoryBytes: UInt64? = nil,
         ollamaTransport: OllamaHTTPTransport? = nil,
-        gatewayTransport: BoundedHTTPTransport? = nil
+        gatewayTransport: BoundedHTTPTransport? = nil,
+        builtInTransport: BuiltInHTTPTransport? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -100,7 +101,8 @@ public enum JECommandLine {
                 secretStore: secretStore,
                 harnessRunner: harnessRunner,
                 stdoutSink: stdoutSink,
-                musePhysicalMemoryBytes: musePhysicalMemoryBytes
+                musePhysicalMemoryBytes: musePhysicalMemoryBytes,
+                builtInTransport: builtInTransport
             )
         case "profile":
             return ProfileCommands.run(

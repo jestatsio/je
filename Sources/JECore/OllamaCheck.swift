@@ -205,7 +205,7 @@ public struct URLSessionOllamaHTTPTransport: OllamaHTTPTransport {
     }
 }
 
-private final class BoundedDataDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+final class BoundedDataDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     let semaphore = DispatchSemaphore(value: 0)
     private let lock = NSLock()
     private let limit: Int

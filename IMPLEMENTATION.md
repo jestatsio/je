@@ -42,6 +42,9 @@ foundation slice, not a claim that the launch platform is complete.
   assignments with `je assignments`. Studio publication stays host-only.
 - `je why` route explanations and `je ask` harness launch for selected
   personal-machine Codex, Claude Code, and Muse built-in local assignments.
+  Explicit `je ask --single-step` can select only a qualified built-in
+  assignment. The first built-in executor makes one bounded Ollama native
+  chat request with no tools, shell, edits, or session state.
   Catalog-bound Codex requires an exact version check, digest check, catalog
   validation, and a private exact-byte snapshot. Muse local requires the
   exact qualified CLI version, the `muse-local-glimmer` protocol, the MLX
@@ -68,7 +71,8 @@ foundation slice, not a claim that the launch platform is complete.
 
 - Memory connection checks, gateway protocol probes, native Ollama launch,
   connect, run, export, or credential commands.
-- Muse arbitrary local endpoints and built-in launch, engine lifecycle,
+- Muse arbitrary local endpoints, built-in file context and non-Ollama
+  built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
   remote access. Unsupported launch cells fail closed after route display.
 - Any qualified local model assignment. Matrix cells remain planned or blocked
