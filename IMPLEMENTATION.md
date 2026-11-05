@@ -62,10 +62,11 @@ foundation slice, not a claim that the launch platform is complete.
   returns an evidence reference without claiming qualification.
 - `je assignments qualify` runs a four-task bounded headless file suite in
   temporary private workspaces. The tasks cover exact copy, key selection,
-  line filtering, and placeholder replacement. It stores content-addressed
-  qualification evidence with exact candidate identity, per-task results,
-  exit codes, durations, and output digests. It marks an assignment qualified
-  only on an explicit passing run.
+  line filtering, and placeholder replacement. Built-in assignments run a
+  separate three-task exact-answer suite through the same single-step route.
+  It stores content-addressed qualification evidence with exact candidate
+  identity, per-task results, exit codes, durations, and output digests. It
+  marks an assignment qualified only on an explicit passing run.
 
 ## What this slice does not contain
 

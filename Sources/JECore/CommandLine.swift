@@ -85,7 +85,8 @@ public enum JECommandLine {
                 secretStore: secretStore,
                 harnessRunner: harnessRunner,
                 recordedDay: recordedDay,
-                musePhysicalMemoryBytes: musePhysicalMemoryBytes
+                musePhysicalMemoryBytes: musePhysicalMemoryBytes,
+                builtInTransport: builtInTransport
             )
         case "why", "ask":
             return AskWhyCommand.run(

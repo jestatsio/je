@@ -308,19 +308,22 @@ public struct QualificationEvidenceProducer: Sendable {
     private let harnessRunner: HarnessRunning
     private let recordedDay: String
     private let musePhysicalMemoryBytes: UInt64?
+    private let builtInTransport: BuiltInHTTPTransport
 
     public init(
         directory: URL,
         secretStore: SecretStoring,
         harnessRunner: HarnessRunning,
         recordedDay: String? = nil,
-        musePhysicalMemoryBytes: UInt64? = nil
+        musePhysicalMemoryBytes: UInt64? = nil,
+        builtInTransport: BuiltInHTTPTransport? = nil
     ) {
         self.directory = directory.standardizedFileURL
         self.secretStore = secretStore
         self.harnessRunner = harnessRunner
         self.recordedDay = recordedDay ?? Self.currentUTCDay()
         self.musePhysicalMemoryBytes = musePhysicalMemoryBytes
+        self.builtInTransport = builtInTransport ?? URLSessionBuiltInHTTPTransport()
     }
 
     public func produce(
@@ -410,15 +413,10 @@ public struct QualificationEvidenceProducer: Sendable {
         }
 
         if candidate.harness == .builtIn {
-            checks.append(check("connection_profile", passed: false, detail: "not_applicable"))
-            checks.append(check("secret_resolution", passed: false, detail: "not_applicable"))
-            appendSuiteFailures(to: &checks, launchDetail: "unsupported_harness", taskDetail: "unsupported_harness")
-            return record(
+            return produceBuiltIn(
                 candidate: candidate,
-                checks: checks,
-                outputDigest: nil,
-                harnessExitCode: nil,
-                durationMs: nil
+                initialChecks: checks,
+                executableOverride: executableOverride
             )
         }
 
@@ -611,10 +609,209 @@ public struct QualificationEvidenceProducer: Sendable {
         )
     }
 
+    private static let builtInSuiteID = "bounded-builtin-tasks-v1"
+    private static let builtInTaskIDs = [
+        "exact-token-v1",
+        "extract-key-value-v1",
+        "select-matching-line-v1"
+    ]
+
+    private func produceBuiltIn(
+        candidate: RouteCandidate,
+        initialChecks: [QualificationCheck],
+        executableOverride: String?
+    ) -> QualificationEvidenceRecord {
+        var checks = initialChecks
+        let routeSupported = BuiltInExecutor.isSupported(candidate)
+        checks.append(check(
+            "builtin_route",
+            passed: routeSupported,
+            detail: routeSupported ? "supported" : "unsupported_route"
+        ))
+        guard executableOverride == nil else {
+            checks.append(check("connection_profile", passed: false, detail: "not_applicable"))
+            checks.append(check("secret_resolution", passed: false, detail: "not_applicable"))
+            appendBuiltInFailures(
+                to: &checks,
+                launchDetail: "executable_not_applicable",
+                taskDetail: "executable_not_applicable"
+            )
+            return record(
+                candidate: candidate,
+                checks: checks,
+                taskID: Self.builtInSuiteID,
+                outputDigest: nil,
+                harnessExitCode: nil,
+                durationMs: nil
+            )
+        }
+        guard let profileName = candidate.connectionProfileName else {
+            checks.append(check("connection_profile", passed: false, detail: "missing"))
+            checks.append(check("secret_resolution", passed: false, detail: "missing_profile"))
+            appendBuiltInFailures(to: &checks, launchDetail: "missing_profile", taskDetail: "missing_profile")
+            return record(
+                candidate: candidate,
+                checks: checks,
+                taskID: Self.builtInSuiteID,
+                outputDigest: nil,
+                harnessExitCode: nil,
+                durationMs: nil
+            )
+        }
+        let profile: ResolvedOllamaProfile
+        do {
+            profile = try ProfileStore(directory: directory)
+                .loadResolvedOllamaProfile(name: profileName, secretStore: secretStore)
+            checks.append(check("connection_profile", passed: true, detail: "loaded"))
+            checks.append(check(
+                "secret_resolution",
+                passed: true,
+                detail: "resolved_without_recording_secret"
+            ))
+        } catch {
+            checks.append(check("connection_profile", passed: false, detail: "load_failed"))
+            checks.append(check("secret_resolution", passed: false, detail: "load_failed"))
+            appendBuiltInFailures(to: &checks, launchDetail: "load_failed", taskDetail: "load_failed")
+            return record(
+                candidate: candidate,
+                checks: checks,
+                taskID: Self.builtInSuiteID,
+                outputDigest: nil,
+                harnessExitCode: nil,
+                durationMs: nil
+            )
+        }
+        guard routeSupported else {
+            appendBuiltInFailures(
+                to: &checks,
+                launchDetail: "unsupported_route",
+                taskDetail: "unsupported_route"
+            )
+            return record(
+                candidate: candidate,
+                checks: checks,
+                taskID: Self.builtInSuiteID,
+                outputDigest: nil,
+                harnessExitCode: nil,
+                durationMs: nil
+            )
+        }
+
+        var taskResults: [QualificationTaskResult] = []
+        var taskChecks: [QualificationCheck] = []
+        var preparationPassed = true
+        var totalDuration: Int64 = 0
+        for definition in Self.builtInTaskDefinitions() {
+            let started = Date()
+            var outputDigest: String?
+            let taskPassed: Bool
+            let taskDetail: String
+            do {
+                let answer = try BuiltInExecutor.execute(
+                    candidate: candidate,
+                    profile: profile,
+                    prompt: definition.prompt,
+                    transport: builtInTransport
+                )
+                outputDigest = SHA256.hexDigest(Data(answer.utf8))
+                taskPassed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                    == definition.expectedText
+                taskDetail = taskPassed ? "exact_output_verified" : "output_mismatch"
+            } catch let error as BuiltInExecutionError {
+                if error == .profileMismatch || error == .unsupportedRoute {
+                    preparationPassed = false
+                }
+                taskPassed = false
+                taskDetail = error.launchStatus
+            } catch {
+                taskPassed = false
+                taskDetail = "unreachable"
+            }
+            let taskDuration = Int64(max(0, Date().timeIntervalSince(started) * 1000).rounded())
+            totalDuration += taskDuration
+            taskResults.append(QualificationTaskResult(
+                taskID: definition.id,
+                status: taskPassed ? .passed : .failed,
+                detailCode: taskDetail,
+                outputSHA256: outputDigest,
+                harnessExitCode: nil,
+                durationMs: taskDuration
+            ))
+            taskChecks.append(check("task:" + definition.id, passed: taskPassed, detail: taskDetail))
+        }
+        checks.append(check(
+            "launch_preparation",
+            passed: preparationPassed,
+            detail: preparationPassed ? "prepared" : "preparation_failed"
+        ))
+        checks.append(contentsOf: taskChecks)
+        let digests = taskResults.compactMap(\.outputSHA256)
+        let outputDigest = digests.count == taskResults.count
+            ? SHA256.hexDigest(Data(digests.joined(separator: "\n").utf8))
+            : nil
+        return record(
+            candidate: candidate,
+            checks: checks,
+            taskResults: taskResults,
+            taskID: Self.builtInSuiteID,
+            outputDigest: outputDigest,
+            harnessExitCode: nil,
+            durationMs: totalDuration
+        )
+    }
+
+    private func appendBuiltInFailures(
+        to checks: inout [QualificationCheck],
+        launchDetail: String,
+        taskDetail: String
+    ) {
+        checks.append(check("launch_preparation", passed: false, detail: launchDetail))
+        for id in Self.builtInTaskIDs {
+            checks.append(check("task:" + id, passed: false, detail: taskDetail))
+        }
+    }
+
+    private struct BuiltInTaskDefinition {
+        let id: String
+        let prompt: String
+        let expectedText: String
+    }
+
+    private static func builtInTaskDefinitions() -> [BuiltInTaskDefinition] {
+        [
+            BuiltInTaskDefinition(
+                id: "exact-token-v1",
+                prompt: "Reply with exactly this token and nothing else: JE-BUILTIN-QUAL-7F3A",
+                expectedText: "JE-BUILTIN-QUAL-7F3A"
+            ),
+            BuiltInTaskDefinition(
+                id: "extract-key-value-v1",
+                prompt: """
+                Read these lines and reply with only the value assigned to answer_key.
+                color=blue
+                answer_key=qual-value-42
+                size=small
+                """,
+                expectedText: "qual-value-42"
+            ),
+            BuiltInTaskDefinition(
+                id: "select-matching-line-v1",
+                prompt: """
+                Reply with only the line that contains NEEDLE-42.
+                alpha line
+                gamma NEEDLE-42 line
+                omega line
+                """,
+                expectedText: "gamma NEEDLE-42 line"
+            )
+        ]
+    }
+
     private func record(
         candidate: RouteCandidate,
         checks: [QualificationCheck],
         taskResults: [QualificationTaskResult] = [],
+        taskID: String = "bounded-file-tasks-v2",
         outputDigest: String?,
         harnessExitCode: Int32?,
         durationMs: Int64?
@@ -628,7 +825,7 @@ public struct QualificationEvidenceProducer: Sendable {
             candidate: candidate,
             checks: checks,
             overallResult: passed ? "bounded_task_passed" : "bounded_task_failed",
-            taskID: "bounded-file-tasks-v2",
+            taskID: taskID,
             taskResults: taskResults,
             taskOutputSHA256: outputDigest,
             harnessExitCode: harnessExitCode,

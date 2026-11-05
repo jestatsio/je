@@ -10,7 +10,8 @@ public enum AssignmentCommands {
         secretStore: SecretStoring? = nil,
         harnessRunner: HarnessRunning? = nil,
         recordedDay: String? = nil,
-        musePhysicalMemoryBytes: UInt64? = nil
+        musePhysicalMemoryBytes: UInt64? = nil,
+        builtInTransport: BuiltInHTTPTransport? = nil
     ) -> CLIResult {
         guard arguments.first == "assignments", arguments.count >= 2 else {
             return invalid()
@@ -52,7 +53,8 @@ public enum AssignmentCommands {
                     secretStore: secretStore,
                     harnessRunner: harnessRunner,
                     recordedDay: recordedDay,
-                    musePhysicalMemoryBytes: musePhysicalMemoryBytes
+                    musePhysicalMemoryBytes: musePhysicalMemoryBytes,
+                    builtInTransport: builtInTransport
                 )
             case "remove":
                 guard arguments.count == 3 else { return invalid() }
@@ -88,7 +90,8 @@ public enum AssignmentCommands {
         secretStore: SecretStoring?,
         harnessRunner: HarnessRunning?,
         recordedDay: String?,
-        musePhysicalMemoryBytes: UInt64?
+        musePhysicalMemoryBytes: UInt64?,
+        builtInTransport: BuiltInHTTPTransport?
     ) throws -> CLIResult {
         guard arguments.count >= 3, !arguments[2].hasPrefix("-") else {
             return invalid()
@@ -135,7 +138,8 @@ public enum AssignmentCommands {
             secretStore: secretStore ?? ProcessSecretStore.default(environment: environment),
             harnessRunner: harnessRunner ?? ProcessHarnessRunner(),
             recordedDay: recordedDay,
-            musePhysicalMemoryBytes: musePhysicalMemoryBytes
+            musePhysicalMemoryBytes: musePhysicalMemoryBytes,
+            builtInTransport: builtInTransport
         )
         let record = producer.produce(
             candidate: candidate,
