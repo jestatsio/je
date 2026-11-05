@@ -129,21 +129,11 @@ final class GatewayCheckTests: XCTestCase {
         )
     }
 
-    func testDoctorProbeAndHarnessStayOutOfNativeSlice() throws {
+    func testDoctorHarnessRequiresProbe() throws {
         try saveProfile()
         let transport = FakeTransport(
             response: OllamaHTTPResponse(statusCode: 200, data: Data("{\"data\":[]}".utf8))
         )
-        let probe = JECommandLine.run(
-            ["--state-dir", stateDirectory.path, "doctor", "--profile", "alice", "--probe"],
-            environment: [:],
-            secretStore: fakeSecrets,
-            gatewayTransport: transport
-        )
-        XCTAssertEqual(probe.code, 2)
-        XCTAssertTrue(probe.stderr.contains("protocol probes are not ported"))
-        XCTAssertEqual(transport.callCount, 0)
-
         let harness = JECommandLine.run(
             ["--state-dir", stateDirectory.path, "doctor", "--profile", "alice",
              "--harness", "codex"],
@@ -154,7 +144,7 @@ final class GatewayCheckTests: XCTestCase {
         XCTAssertEqual(harness.code, 2)
         XCTAssertTrue(harness.stderr.contains("Use --harness only with --probe."))
         XCTAssertEqual(transport.callCount, 0)
-        XCTAssertFalse((probe.stderr + harness.stderr).contains(secret))
+        XCTAssertFalse(harness.stderr.contains(secret))
     }
 
     private func resolvedProfile() -> ResolvedConnectionProfile {

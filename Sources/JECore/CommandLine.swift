@@ -31,6 +31,7 @@ public enum JECommandLine {
         musePhysicalMemoryBytes: UInt64? = nil,
         ollamaTransport: OllamaHTTPTransport? = nil,
         gatewayTransport: BoundedHTTPTransport? = nil,
+        gatewayProbeTransport: GatewayProbeTransport? = nil,
         builtInTransport: BuiltInHTTPTransport? = nil,
         memoryTransport: MemoryHTTPTransport? = nil
     ) -> CLIResult {
@@ -73,7 +74,8 @@ public enum JECommandLine {
                 explicitStateDirectory: explicitStateDirectory,
                 environment: environment,
                 secretStore: secretStore,
-                gatewayTransport: gatewayTransport
+                gatewayTransport: gatewayTransport,
+                gatewayProbeTransport: gatewayProbeTransport
             )
         case "assignments":
             return AssignmentCommands.run(
@@ -199,7 +201,8 @@ public enum JECommandLine {
         explicitStateDirectory: String?,
         environment: [String: String],
         secretStore: SecretStoring?,
-        gatewayTransport: BoundedHTTPTransport?
+        gatewayTransport: BoundedHTTPTransport?,
+        gatewayProbeTransport: GatewayProbeTransport?
     ) -> CLIResult {
         guard arguments.count >= 2 else { return invalid() }
         guard arguments[1] == "muse" else {
@@ -211,7 +214,8 @@ public enum JECommandLine {
                 ),
                 environment: environment,
                 secretStore: secretStore,
-                gatewayTransport: gatewayTransport
+                gatewayTransport: gatewayTransport,
+                gatewayProbeTransport: gatewayProbeTransport
             )
         }
         var asJSON = false
@@ -270,19 +274,14 @@ public enum JECommandLine {
         stateDirectory: URL,
         environment: [String: String],
         secretStore: SecretStoring?,
-        gatewayTransport: BoundedHTTPTransport?
+        gatewayTransport: BoundedHTTPTransport?,
+        gatewayProbeTransport: GatewayProbeTransport?
     ) -> CLIResult {
         guard let parsed = GatewayDoctorArguments(arguments: Array(arguments.dropFirst())) else {
             return invalid()
         }
         if parsed.harness != nil && !parsed.probe {
             return CLIResult(code: 2, stderr: "Use --harness only with --probe.\n")
-        }
-        if parsed.probe {
-            return CLIResult(
-                code: 2,
-                stderr: "Gateway protocol probes are not ported to the native core yet. Use the released Python client for now.\n"
-            )
         }
         do {
             let profile = try ProfileStore(directory: stateDirectory).loadResolvedProfile(
@@ -293,12 +292,47 @@ public enum JECommandLine {
                 profile: profile,
                 transport: gatewayTransport ?? URLSessionOllamaHTTPTransport()
             )
-            if report.passed {
-                return CLIResult(code: 0, stdout: "Connected. Model \(profile.model) is available.\n")
+            guard report.passed else {
+                return CLIResult(
+                    code: 1,
+                    stderr: "Connected, but the selected model is not available to this key.\n"
+                )
             }
+            let connected = "Connected. Model \(profile.model) is available.\n"
+            guard parsed.probe else {
+                return CLIResult(code: 0, stdout: connected)
+            }
+            let protocols: [GatewayProbeProtocol]
+            switch parsed.harness {
+            case "codex":
+                protocols = [.responses]
+            case "claude":
+                protocols = [.messages]
+            default:
+                protocols = [.responses, .messages]
+            }
+            let probeReport = GatewayProbeRunner.run(
+                profile: profile,
+                protocols: protocols,
+                transport: gatewayProbeTransport ?? URLSessionGatewayProbeTransport()
+            )
+            let reportURL: URL
+            do {
+                reportURL = try GatewayProbeReportStore(directory: stateDirectory)
+                    .write(probeReport, profileName: parsed.profile)
+            } catch {
+                return CLIResult(
+                    code: 2,
+                    stdout: connected,
+                    stderr: "The protocol probe report could not be written.\n"
+                )
+            }
+            let counts = probeReport.counts
             return CLIResult(
-                code: 1,
-                stderr: "Connected, but the selected model is not available to this key.\n"
+                code: probeReport.passed ? 0 : 1,
+                stdout: connected
+                    + "Protocol checks: \(counts.passed) passed, \(counts.failed) failed, "
+                    + "\(counts.notRun) not run. Private report: \(reportURL.path)\n"
             )
         } catch let error as StateStoreError {
             return CLIResult(code: 2, stderr: error.message + "\n")
