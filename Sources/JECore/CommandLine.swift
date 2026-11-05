@@ -30,6 +30,7 @@ public enum JECommandLine {
         stdoutSink: CLIOutputSink? = nil,
         musePhysicalMemoryBytes: UInt64? = nil,
         ollamaTransport: OllamaHTTPTransport? = nil,
+        ollamaRelayUpstream: OllamaRelayUpstream? = nil,
         gatewayTransport: BoundedHTTPTransport? = nil,
         gatewayProbeTransport: GatewayProbeTransport? = nil,
         builtInTransport: BuiltInHTTPTransport? = nil,
@@ -136,7 +137,9 @@ public enum JECommandLine {
                 explicitStateDirectory: explicitStateDirectory,
                 environment: environment,
                 secretStore: secretStore,
-                ollamaTransport: ollamaTransport
+                harnessRunner: harnessRunner,
+                ollamaTransport: ollamaTransport,
+                ollamaRelayUpstream: ollamaRelayUpstream
             )
         case "credential":
             return credential(
@@ -445,7 +448,9 @@ public enum JECommandLine {
         explicitStateDirectory: String?,
         environment: [String: String],
         secretStore: SecretStoring?,
-        ollamaTransport: OllamaHTTPTransport?
+        harnessRunner: HarnessRunning?,
+        ollamaTransport: OllamaHTTPTransport?,
+        ollamaRelayUpstream: OllamaRelayUpstream?
     ) -> CLIResult {
         let directory = stateDirectory(
             explicit: explicitStateDirectory,
@@ -463,10 +468,15 @@ public enum JECommandLine {
         guard let parsed = OllamaTopLevelArguments(arguments: Array(arguments.dropFirst())) else {
             return invalid()
         }
-        guard !parsed.hadSeparator, parsed.positionals == ["check"] else {
-            return CLIResult(
-                code: 2,
-                stderr: "Native Ollama launch is not ported to the native core yet. Use the released Python client for now.\n"
+        let isCheck = !parsed.hadSeparator && parsed.positionals == ["check"]
+        if !isCheck {
+            return ollamaLaunch(
+                parsed: parsed,
+                stateDirectory: directory,
+                environment: environment,
+                secretStore: secretStore,
+                harnessRunner: harnessRunner,
+                ollamaRelayUpstream: ollamaRelayUpstream
             )
         }
         if parsed.executable != nil {
@@ -507,6 +517,115 @@ public enum JECommandLine {
         } catch {
             return CLIResult(code: 2, stderr: "The native Ollama connection could not be checked.\n")
         }
+    }
+
+    private static func ollamaLaunch(
+        parsed: OllamaTopLevelArguments,
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        harnessRunner: HarnessRunning?,
+        ollamaRelayUpstream: OllamaRelayUpstream?
+    ) -> CLIResult {
+        guard parsed.hadSeparator || parsed.positionals.isEmpty else {
+            return invalid()
+        }
+        guard let profileName = parsed.profile else {
+            return CLIResult(
+                code: 2,
+                stderr: "Select a saved native Ollama connection with --profile.\n"
+            )
+        }
+        let profile: ResolvedOllamaProfile
+        do {
+            profile = try ProfileStore(directory: stateDirectory).loadResolvedOllamaProfile(
+                name: profileName,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The native Ollama connection could not be launched.\n")
+        }
+        guard let executableURL = resolveOllamaExecutable(
+            override: parsed.executable, environment: environment) else {
+            return CLIResult(
+                code: 2,
+                stderr: "Install the Ollama CLI or provide the path to its executable.\n"
+            )
+        }
+        let relay = OllamaLoopbackRelay(
+            upstreamBase: profile.endpoint,
+            bearerToken: profile.secret,
+            upstream: ollamaRelayUpstream ?? URLSessionOllamaRelayUpstream())
+        let relayURL: URL
+        do {
+            relayURL = try relay.start()
+        } catch {
+            return CLIResult(code: 2, stderr: "The local Ollama relay could not start.\n")
+        }
+        defer { relay.stop() }
+        var childEnvironment = environment
+        childEnvironment["OLLAMA_HOST"] = relayURL.absoluteString
+        let childArguments = parsed.positionals.isEmpty
+            ? ["run", profile.model]
+            : parsed.positionals
+        do {
+            let code = try (harnessRunner ?? ProcessHarnessRunner()).run(HarnessLaunchSpec(
+                executableURL: executableURL,
+                arguments: childArguments,
+                environment: childEnvironment))
+            return CLIResult(code: code)
+        } catch let error as HarnessLaunchError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The native Ollama CLI could not be launched.\n")
+        }
+    }
+
+    private static func resolveOllamaExecutable(
+        override: String?, environment: [String: String]
+    ) -> URL? {
+        let fileManager = FileManager.default
+        if let override, !override.isEmpty {
+            if override.contains("/") {
+                let url = URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+                return isLaunchableFile(url.path, fileManager: fileManager) ? url : nil
+            }
+            return searchExecutableOnPath(named: override, environment: environment)
+        }
+        if let found = searchExecutableOnPath(named: "ollama", environment: environment) {
+            return found
+        }
+        for path in ["/usr/local/bin/ollama", "/opt/homebrew/bin/ollama"]
+        where isLaunchableFile(path, fileManager: fileManager) {
+            return URL(fileURLWithPath: path)
+        }
+        return nil
+    }
+
+    private static func isLaunchableFile(
+        _ path: String, fileManager: FileManager
+    ) -> Bool {
+        var isDirectory = ObjCBool(false)
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            return false
+        }
+        return fileManager.isExecutableFile(atPath: path)
+    }
+
+    private static func searchExecutableOnPath(
+        named name: String, environment: [String: String]
+    ) -> URL? {
+        for directory in (environment["PATH"] ?? "").split(separator: ":") where !directory.isEmpty {
+            let candidate = URL(fileURLWithPath: String(directory))
+                .appendingPathComponent(name)
+            if isLaunchableFile(candidate.path, fileManager: FileManager.default) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     private struct OllamaTopLevelArguments {

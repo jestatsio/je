@@ -70,6 +70,13 @@ foundation slice, not a claim that the launch platform is complete.
 - `je ollama --profile NAME check` performs a bounded, no-redirect,
   non-inference native model listing check with the saved key. It reports only
   whether the default model is available.
+- `je ollama --profile NAME` starts the native Ollama CLI through a
+  temporary loopback relay with a random capability-token path, matching the
+  Python client: the default model opens interactively, arguments after
+  `--` pass through verbatim, and exit codes propagate. The relay forwards
+  only model inspection, chat, generate, and show requests with the saved
+  key injected, sanitizes upstream error bodies, and closes when the CLI
+  exits. Management requests are refused locally.
 - `je memory check NAME` initializes the saved MCP connection and pages the
   tool list inside bounded request, page, tool, and byte limits. It never
   calls a memory tool and reports only protocol, count, and read or write
@@ -88,7 +95,7 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Native Ollama launch, connect, run, or export commands.
+- Connect, run, or export commands.
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
