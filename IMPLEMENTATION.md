@@ -26,9 +26,11 @@ foundation slice, not a claim that the launch platform is complete.
   harnesses, launch modes, execution places, and qualification status.
 - A user-artifact boundary model with a test that rejects host-only modules.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
-- Read-only memory and native Ollama profile parity, plus gateway profile list,
-  show, native schema 3 writes, catalog-bound writes, and removal. Legacy
-  schema 1 and 2 files keep their strict private-file checks.
+- Gateway, memory, and native Ollama profile list and show parity. Native
+  writes keep credentials in platform secret storage. Gateway profiles use
+  schema 3, including catalog-bound writes. Memory and Ollama profiles use
+  schema 2 secret references. Legacy embedded-secret files keep their strict
+  private-file checks.
 - A deterministic routing policy core with hard filters, settled preference
   layers, explicit cloud authorization, replayable filter results, and traced
   advisory scores that do not change the starter route.
@@ -58,8 +60,8 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Memory and native Ollama profile writes and checks, native Ollama launch,
-  connect, run, doctor, export, or credential commands.
+- Memory and native Ollama connection checks, native Ollama launch, connect,
+  run, doctor, export, or credential commands.
 - Muse arbitrary local endpoints and built-in launch, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
   remote access. Unsupported launch cells fail closed after route display.

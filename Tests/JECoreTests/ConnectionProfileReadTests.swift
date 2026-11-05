@@ -99,7 +99,7 @@ final class ConnectionProfileReadTests: XCTestCase {
         XCTAssertThrowsError(try store.loadPublicOllamaProfile(name: "alice"))
     }
 
-    func testMemoryAndOllamaWritesStayUnportedWithoutEcho() {
+    func testMalformedMemoryAndOllamaWritesDoNotEcho() {
         let memory = JECommandLine.run(
             ["--state-dir", stateDirectory.path, "memory", "add", "alice", "--token-env", memorySecret],
             environment: [:]

@@ -105,16 +105,21 @@ public enum JECommandLine {
                 secretStore: secretStore
             )
         case "memory":
-            return memory(
+            return ProfileCommands.runMemory(
                 arguments: remaining,
-                explicitStateDirectory: explicitStateDirectory,
-                environment: environment
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore
             )
         case "ollama":
             return ollama(
                 arguments: remaining,
                 explicitStateDirectory: explicitStateDirectory,
-                environment: environment
+                environment: environment,
+                secretStore: secretStore
             )
         case "workspace":
             return CLIResult(
@@ -236,45 +241,11 @@ public enum JECommandLine {
         }
     }
 
-    private static func memory(
-        arguments: [String],
-        explicitStateDirectory: String?,
-        environment: [String: String]
-    ) -> CLIResult {
-        guard arguments.count >= 2 else { return invalid() }
-        if ["add", "remove", "check"].contains(arguments[1]) {
-            return CLIResult(
-                code: 2,
-                stderr: "This memory command is not ported to the native core yet. Use the released Python client for now.\n"
-            )
-        }
-        let store = ProfileStore(directory: stateDirectory(
-            explicit: explicitStateDirectory,
-            environment: environment
-        ))
-        do {
-            if arguments == ["memory", "list"] {
-                let names = try store.listMemoryProfiles()
-                let output = names.isEmpty
-                    ? "No saved memory connections. Run je memory add --help.\n"
-                    : names.joined(separator: "\n") + "\n"
-                return CLIResult(code: 0, stdout: output)
-            }
-            if arguments.count == 3 && arguments[1] == "show" {
-                return json(try store.loadPublicMemoryProfile(name: arguments[2]))
-            }
-        } catch let error as StateStoreError {
-            return CLIResult(code: 2, stderr: error.message + "\n")
-        } catch {
-            return CLIResult(code: 2, stderr: "The memory profile could not be read.\n")
-        }
-        return invalid()
-    }
-
     private static func ollama(
         arguments: [String],
         explicitStateDirectory: String?,
-        environment: [String: String]
+        environment: [String: String],
+        secretStore: SecretStoring?
     ) -> CLIResult {
         guard arguments.count >= 3, arguments[1] == "profile" else {
             if arguments.first == "ollama" {
@@ -285,33 +256,15 @@ public enum JECommandLine {
             }
             return invalid()
         }
-        if ["add", "remove"].contains(arguments[2]) {
-            return CLIResult(
-                code: 2,
-                stderr: "Native Ollama profile writes are not ported to the native core yet. Use the released Python client for now.\n"
-            )
-        }
-        let store = ProfileStore(directory: stateDirectory(
-            explicit: explicitStateDirectory,
-            environment: environment
-        ))
-        do {
-            if arguments == ["ollama", "profile", "list"] {
-                let names = try store.listOllamaProfiles()
-                let output = names.isEmpty
-                    ? "No saved native connections. Run je ollama profile add --help.\n"
-                    : names.joined(separator: "\n") + "\n"
-                return CLIResult(code: 0, stdout: output)
-            }
-            if arguments.count == 4 && arguments[2] == "show" {
-                return json(try store.loadPublicOllamaProfile(name: arguments[3]))
-            }
-        } catch let error as StateStoreError {
-            return CLIResult(code: 2, stderr: error.message + "\n")
-        } catch {
-            return CLIResult(code: 2, stderr: "The native Ollama profile could not be read.\n")
-        }
-        return invalid()
+        return ProfileCommands.runOllamaProfile(
+            arguments: arguments,
+            stateDirectory: stateDirectory(
+                explicit: explicitStateDirectory,
+                environment: environment
+            ),
+            environment: environment,
+            secretStore: secretStore
+        )
     }
 
     private static func stateDirectory(
@@ -363,8 +316,10 @@ public enum JECommandLine {
       profile show NAME        Show public connection fields without credentials
       memory list              List saved memory connection names without tokens
       memory show NAME         Show public memory fields without tokens
+      memory add NAME ...      Save a memory connection with a native secret reference
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
+      ollama profile add NAME  Save a native Ollama connection with a secret reference
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
       assignments qualify ID   Run and store one bounded qualification task

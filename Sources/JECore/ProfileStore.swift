@@ -62,7 +62,8 @@ public struct PublicOllamaProfile: Codable, Equatable, Sendable {
 
 private struct LegacyMemoryProfile {
     let endpoint: String
-    let secret: String
+    let secret: String?
+    let secretReference: String?
     let serverName: String
 
     func publicProfile(name: String) -> PublicMemoryProfile {
@@ -72,11 +73,54 @@ private struct LegacyMemoryProfile {
 
 private struct LegacyOllamaProfile {
     let endpoint: String
-    let secret: String
+    let secret: String?
+    let secretReference: String?
     let model: String
 
     func publicProfile(name: String) -> PublicOllamaProfile {
         PublicOllamaProfile(name: name, endpoint: endpoint, model: model)
+    }
+}
+
+public struct ResolvedMemoryProfile: Equatable, Sendable {
+    public let name: String
+    public let endpoint: String
+    public let secret: String
+    public let serverName: String
+}
+
+public struct ResolvedOllamaProfile: Equatable, Sendable {
+    public let name: String
+    public let endpoint: String
+    public let secret: String
+    public let model: String
+}
+
+private struct NativeMemoryProfileFile: Encodable {
+    let schemaVersion: Int
+    let endpoint: String
+    let secretReference: String
+    let serverName: String
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case endpoint
+        case secretReference = "secret_reference"
+        case serverName = "server_name"
+    }
+}
+
+private struct NativeOllamaProfileFile: Encodable {
+    let schemaVersion: Int
+    let endpoint: String
+    let secretReference: String
+    let model: String
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schema_version"
+        case endpoint
+        case secretReference = "secret_reference"
+        case model
     }
 }
 
@@ -311,6 +355,99 @@ public struct ProfileStore: Sendable {
         return references
     }
 
+    private func referencedMemorySecretReferences() throws -> Set<String> {
+        var references: Set<String> = []
+        for name in try listMemoryProfiles() {
+            if let reference = try loadLegacyMemoryProfile(name: name).secretReference {
+                references.insert(reference)
+            }
+        }
+        return references
+    }
+
+    private func referencedOllamaSecretReferences() throws -> Set<String> {
+        var references: Set<String> = []
+        for name in try listOllamaProfiles() {
+            if let reference = try loadLegacyOllamaProfile(name: name).secretReference {
+                references.insert(reference)
+            }
+        }
+        return references
+    }
+
+    private func resolveSecret(
+        embedded: String?,
+        reference: String?,
+        secretStore: SecretStoring,
+        missingMessage: String
+    ) throws -> String {
+        if let embedded {
+            return embedded
+        }
+        guard let reference else {
+            throw StateStoreError("The connection profile is invalid; no contents were displayed.")
+        }
+        do {
+            guard let stored = try secretStore.secret(reference: reference) else {
+                throw StateStoreError(missingMessage)
+            }
+            return stored
+        } catch let error as SecretStoreError {
+            throw StateStoreError(error.message)
+        }
+    }
+
+    private func storeSecret(
+        _ secret: String,
+        reference: String,
+        secretStore: SecretStoring
+    ) throws {
+        do {
+            try secretStore.setSecret(secret, reference: reference)
+            guard try secretStore.secret(reference: reference) == secret else {
+                throw SecretStoreError.operationFailed
+            }
+        } catch let error as SecretStoreError {
+            throw StateStoreError(error.message)
+        }
+    }
+
+    private func encodeNativeProfile<T: Encodable>(_ file: T, sizeFailure: String) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        var data = try encoder.encode(file)
+        data.append(10)
+        guard data.count <= 64 * 1024 else {
+            throw StateStoreError(sizeFailure)
+        }
+        return data
+    }
+
+    private static func generatedMemoryServerName() -> String {
+        "je_memory_" + UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+    }
+
+    private func validateMemorySecret(_ secret: String) throws {
+        guard !secret.isEmpty, !secret.contains(where: { $0.isWhitespace }),
+              !Self.containsControl(secret) else {
+            throw StateStoreError("A nonempty memory credential without whitespace is required.")
+        }
+    }
+
+    private func checkOllamaPublicFields(
+        name: String,
+        endpoint: String,
+        model: String,
+        secret: String
+    ) throws {
+        let decodedEndpoint = endpoint.removingPercentEncoding ?? endpoint
+        let decodedModel = model.removingPercentEncoding ?? model
+        if name.contains(secret) || endpoint.contains(secret) || decodedEndpoint.contains(secret)
+            || model.contains(secret) || decodedModel.contains(secret) {
+            throw StateStoreError("Keep the Ollama service credential out of public connection fields.")
+        }
+    }
+
     private func ensureFolder(named name: String) throws -> URL {
         try ensurePrivateDirectory(directory)
         let folder = directory.appendingPathComponent(name, isDirectory: true)
@@ -380,6 +517,109 @@ public struct ProfileStore: Sendable {
         try loadLegacyMemoryProfile(name: name).publicProfile(name: name)
     }
 
+    public func loadResolvedMemoryProfile(
+        name: String,
+        secretStore: SecretStoring
+    ) throws -> ResolvedMemoryProfile {
+        let profile = try loadLegacyMemoryProfile(name: name)
+        let secret = try resolveSecret(
+            embedded: profile.secret,
+            reference: profile.secretReference,
+            secretStore: secretStore,
+            missingMessage: "The saved memory credential could not be found in native secret storage."
+        )
+        try validateMemorySecret(secret)
+        if name.contains(secret) || profile.endpoint.contains(secret)
+            || profile.serverName.contains(secret) {
+            throw StateStoreError("Keep memory credentials out of public profile fields.")
+        }
+        return ResolvedMemoryProfile(
+            name: name,
+            endpoint: profile.endpoint,
+            secret: secret,
+            serverName: profile.serverName
+        )
+    }
+
+    public func saveNativeMemoryProfile(
+        name: String,
+        endpoint rawEndpoint: String,
+        secret: String,
+        secretStore: SecretStoring,
+        replace: Bool = false
+    ) throws {
+        try validateProfileName(name)
+        _ = try normalizedEndpoint(rawEndpoint)
+        try validateMemorySecret(secret)
+        let folder = try ensureFolder(named: "memory-profiles")
+        let path = folder.appendingPathComponent(name + ".json")
+        let existed = pathExists(path)
+        var oldReference: String?
+        var serverName: String?
+        if existed {
+            guard replace else {
+                throw StateStoreError("That profile already exists; use explicit replacement to update it.")
+            }
+            let old = try loadLegacyMemoryProfile(name: name)
+            oldReference = old.secretReference
+            serverName = old.serverName
+        }
+        let resolvedServerName = serverName ?? Self.generatedMemoryServerName()
+        guard isValidMemoryServerName(resolvedServerName) else {
+            throw StateStoreError("Use a memory server name of 1-64 ASCII letters, digits, underscores, or hyphens.")
+        }
+        if name.contains(secret) || rawEndpoint.contains(secret)
+            || resolvedServerName.contains(secret) {
+            throw StateStoreError("Keep memory credentials out of public profile fields.")
+        }
+        let reference = "memory/profile/\(name)/\(UUID().uuidString.lowercased())"
+        try storeSecret(secret, reference: reference, secretStore: secretStore)
+        let file = NativeMemoryProfileFile(
+            schemaVersion: 2,
+            endpoint: rawEndpoint,
+            secretReference: reference,
+            serverName: resolvedServerName
+        )
+        do {
+            let data = try encodeNativeProfile(file, sizeFailure: "The memory profile exceeds the supported size.")
+            try writePrivateJSONData(data, to: path, replace: replace)
+        } catch {
+            try? secretStore.deleteSecret(reference: reference)
+            if let error = error as? StateStoreError {
+                throw error
+            }
+            throw StateStoreError("Could not save private state; the previous file was preserved.")
+        }
+        if let oldReference, oldReference != reference,
+           !(try referencedMemorySecretReferences().contains(oldReference)) {
+            try? secretStore.deleteSecret(reference: oldReference)
+        }
+    }
+
+    public func deleteMemoryProfile(
+        name: String,
+        secretStore: SecretStoring? = nil,
+        deleteSecret: Bool = false
+    ) throws {
+        try validateProfileName(name)
+        let oldReference = try loadLegacyMemoryProfile(name: name).secretReference
+        let path = try folder(named: "memory-profiles").appendingPathComponent(name + ".json")
+        _ = try readPrivateData(path)
+        do {
+            try FileManager.default.removeItem(at: path)
+        } catch {
+            throw StateStoreError("Cannot remove the memory profile.")
+        }
+        if deleteSecret, let oldReference, let secretStore,
+           !(try referencedMemorySecretReferences().contains(oldReference)) {
+            do {
+                try secretStore.deleteSecret(reference: oldReference)
+            } catch let error as SecretStoreError {
+                throw StateStoreError(error.message)
+            }
+        }
+    }
+
     public func listOllamaProfiles() throws -> [String] {
         try listProfileNames(folderName: "ollama-profiles", failure: "Cannot list native Ollama profiles.") { name in
             _ = try loadLegacyOllamaProfile(name: name)
@@ -388,6 +628,104 @@ public struct ProfileStore: Sendable {
 
     public func loadPublicOllamaProfile(name: String) throws -> PublicOllamaProfile {
         try loadLegacyOllamaProfile(name: name).publicProfile(name: name)
+    }
+
+    public func loadResolvedOllamaProfile(
+        name: String,
+        secretStore: SecretStoring
+    ) throws -> ResolvedOllamaProfile {
+        let profile = try loadLegacyOllamaProfile(name: name)
+        let secret = try resolveSecret(
+            embedded: profile.secret,
+            reference: profile.secretReference,
+            secretStore: secretStore,
+            missingMessage: "The saved Ollama credential could not be found in native secret storage."
+        )
+        guard isValidOllamaSecret(secret) else {
+            throw StateStoreError("A nonempty ASCII Bearer [REDACTED] is required for the Ollama service.")
+        }
+        try checkOllamaPublicFields(name: name, endpoint: profile.endpoint, model: profile.model, secret: secret)
+        return ResolvedOllamaProfile(
+            name: name,
+            endpoint: profile.endpoint,
+            secret: secret,
+            model: profile.model
+        )
+    }
+
+    public func saveNativeOllamaProfile(
+        name: String,
+        endpoint rawEndpoint: String,
+        secret: String,
+        model: String,
+        secretStore: SecretStoring,
+        replace: Bool = false
+    ) throws {
+        try validateProfileName(name)
+        let endpoint = try normalizedOllamaEndpoint(rawEndpoint)
+        guard isValidOllamaSecret(secret) else {
+            throw StateStoreError("A nonempty ASCII Bearer [REDACTED] is required for the Ollama service.")
+        }
+        guard isValidOllamaModel(model) else {
+            throw StateStoreError("Use a native model name of 1-256 ASCII letters, numbers, or model-name separators.")
+        }
+        try checkOllamaPublicFields(name: name, endpoint: endpoint, model: model, secret: secret)
+        let folder = try ensureFolder(named: "ollama-profiles")
+        let path = folder.appendingPathComponent(name + ".json")
+        let existed = pathExists(path)
+        var oldReference: String?
+        if existed {
+            guard replace else {
+                throw StateStoreError("That profile already exists; use explicit replacement to update it.")
+            }
+            oldReference = try loadLegacyOllamaProfile(name: name).secretReference
+        }
+        let reference = "ollama/profile/\(name)/\(UUID().uuidString.lowercased())"
+        try storeSecret(secret, reference: reference, secretStore: secretStore)
+        let file = NativeOllamaProfileFile(
+            schemaVersion: 2,
+            endpoint: endpoint,
+            secretReference: reference,
+            model: model
+        )
+        do {
+            let data = try encodeNativeProfile(file, sizeFailure: "The native Ollama profile exceeds the supported size.")
+            try writePrivateJSONData(data, to: path, replace: replace)
+        } catch {
+            try? secretStore.deleteSecret(reference: reference)
+            if let error = error as? StateStoreError {
+                throw error
+            }
+            throw StateStoreError("Could not save private state; the previous file was preserved.")
+        }
+        if let oldReference, oldReference != reference,
+           !(try referencedOllamaSecretReferences().contains(oldReference)) {
+            try? secretStore.deleteSecret(reference: oldReference)
+        }
+    }
+
+    public func deleteOllamaProfile(
+        name: String,
+        secretStore: SecretStoring? = nil,
+        deleteSecret: Bool = false
+    ) throws {
+        try validateProfileName(name)
+        let oldReference = try loadLegacyOllamaProfile(name: name).secretReference
+        let path = try folder(named: "ollama-profiles").appendingPathComponent(name + ".json")
+        _ = try readPrivateData(path)
+        do {
+            try FileManager.default.removeItem(at: path)
+        } catch {
+            throw StateStoreError("Cannot remove the native Ollama profile.")
+        }
+        if deleteSecret, let oldReference, let secretStore,
+           !(try referencedOllamaSecretReferences().contains(oldReference)) {
+            do {
+                try secretStore.deleteSecret(reference: oldReference)
+            } catch let error as SecretStoreError {
+                throw StateStoreError(error.message)
+            }
+        }
     }
 
     private func listProfileNames(
@@ -501,22 +839,45 @@ public struct ProfileStore: Sendable {
             }
             let object = try JSONSerialization.jsonObject(with: raw, options: [])
             guard let value = object as? [String: Any],
-                  Set(value.keys) == ["schema_version", "endpoint", "token", "server_name"],
-                  exactInt(value["schema_version"]) == 1,
+                  let schemaVersion = exactInt(value["schema_version"]),
+                  [1, 2].contains(schemaVersion),
                   let endpoint = value["endpoint"] as? String,
-                  let secret = value["token"] as? String,
                   let serverName = value["server_name"] as? String else {
                 throw StateStoreError("Unsupported memory profile format.")
             }
-            try validateSecret(secret)
+            let secret: String?
+            let secretReference: String?
+            if schemaVersion == 1 {
+                guard Set(value.keys) == ["schema_version", "endpoint", "token", "server_name"],
+                      let embedded = value["token"] as? String else {
+                    throw StateStoreError("Unsupported memory profile format.")
+                }
+                secret = embedded
+                secretReference = nil
+                try validateSecret(embedded)
+            } else {
+                guard Set(value.keys) == ["schema_version", "endpoint", "secret_reference", "server_name"],
+                      let reference = value["secret_reference"] as? String,
+                      SecretReferenceValidator.isValid(reference) else {
+                    throw StateStoreError("Unsupported memory profile format.")
+                }
+                secret = nil
+                secretReference = reference
+            }
             guard isValidMemoryServerName(serverName) else {
                 throw StateStoreError("Use a memory server name of 1-64 ASCII letters, digits, underscores, or hyphens.")
             }
             _ = try normalizedEndpoint(endpoint)
-            if name.contains(secret) || endpoint.contains(secret) || serverName.contains(secret) {
+            if let secret,
+               name.contains(secret) || endpoint.contains(secret) || serverName.contains(secret) {
                 throw StateStoreError("Keep memory credentials out of public profile fields.")
             }
-            return LegacyMemoryProfile(endpoint: endpoint, secret: secret, serverName: serverName)
+            return LegacyMemoryProfile(
+                endpoint: endpoint,
+                secret: secret,
+                secretReference: secretReference,
+                serverName: serverName
+            )
         } catch let error as StateStoreError {
             throw error
         } catch {
@@ -534,27 +895,46 @@ public struct ProfileStore: Sendable {
             }
             let object = try JSONSerialization.jsonObject(with: raw, options: [])
             guard let value = object as? [String: Any],
-                  Set(value.keys) == ["schema_version", "endpoint", "api_key", "model"],
-                  exactInt(value["schema_version"]) == 1,
+                  let schemaVersion = exactInt(value["schema_version"]),
+                  [1, 2].contains(schemaVersion),
                   let endpointRaw = value["endpoint"] as? String,
-                  let secret = value["api_key"] as? String,
                   let model = value["model"] as? String else {
                 throw StateStoreError("Unsupported native Ollama profile format.")
             }
-            guard isValidOllamaSecret(secret) else {
-                throw StateStoreError("A nonempty ASCII Bearer [REDACTED] is required for the Ollama service.")
+            let secret: String?
+            let secretReference: String?
+            if schemaVersion == 1 {
+                guard Set(value.keys) == ["schema_version", "endpoint", "api_key", "model"],
+                      let embedded = value["api_key"] as? String else {
+                    throw StateStoreError("Unsupported native Ollama profile format.")
+                }
+                secret = embedded
+                secretReference = nil
+                guard isValidOllamaSecret(embedded) else {
+                    throw StateStoreError("A nonempty ASCII Bearer [REDACTED] is required for the Ollama service.")
+                }
+            } else {
+                guard Set(value.keys) == ["schema_version", "endpoint", "secret_reference", "model"],
+                      let reference = value["secret_reference"] as? String,
+                      SecretReferenceValidator.isValid(reference) else {
+                    throw StateStoreError("Unsupported native Ollama profile format.")
+                }
+                secret = nil
+                secretReference = reference
             }
             guard isValidOllamaModel(model) else {
                 throw StateStoreError("Use a native model name of 1-256 ASCII letters, numbers, or model-name separators.")
             }
             let endpoint = try normalizedOllamaEndpoint(endpointRaw)
-            let decodedEndpoint = endpoint.removingPercentEncoding ?? endpoint
-            let decodedModel = model.removingPercentEncoding ?? model
-            if name.contains(secret) || endpoint.contains(secret) || decodedEndpoint.contains(secret)
-                || model.contains(secret) || decodedModel.contains(secret) {
-                throw StateStoreError("Keep the Ollama service credential out of public connection fields.")
+            if let secret {
+                try checkOllamaPublicFields(name: name, endpoint: endpoint, model: model, secret: secret)
             }
-            return LegacyOllamaProfile(endpoint: endpoint, secret: secret, model: model)
+            return LegacyOllamaProfile(
+                endpoint: endpoint,
+                secret: secret,
+                secretReference: secretReference,
+                model: model
+            )
         } catch let error as StateStoreError {
             throw error
         } catch {

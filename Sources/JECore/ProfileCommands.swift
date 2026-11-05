@@ -49,6 +49,170 @@ public enum ProfileCommands {
         }
     }
 
+    public static func runMemory(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?
+    ) -> CLIResult {
+        guard arguments.first == "memory", arguments.count >= 2 else { return invalid() }
+        if arguments[1] == "check" {
+            return CLIResult(
+                code: 2,
+                stderr: "This memory command is not ported to the native core yet. Use the released Python client for now.\n"
+            )
+        }
+        let store = ProfileStore(directory: stateDirectory)
+        do {
+            switch arguments[1] {
+            case "list":
+                guard arguments.count == 2 else { return invalid() }
+                let names = try store.listMemoryProfiles()
+                let output = names.isEmpty
+                    ? "No saved memory connections. Run je memory add --help.\n"
+                    : names.joined(separator: "\n") + "\n"
+                return CLIResult(code: 0, stdout: output)
+            case "show":
+                guard arguments.count == 3 else { return invalid() }
+                return encode(try store.loadPublicMemoryProfile(name: arguments[2]))
+            case "add":
+                guard let parsed = MemoryAddArguments(arguments: Array(arguments.dropFirst(2))) else {
+                    return invalid()
+                }
+                if parsed.replace {
+                    _ = try store.loadPublicMemoryProfile(name: parsed.name)
+                }
+                let secret = try secretValue(
+                    file: parsed.tokenFile,
+                    environmentName: parsed.tokenEnvironment,
+                    environment: environment,
+                    store: store,
+                    provideMessage: "Provide --token-file or --token-env when input is not interactive."
+                )
+                try store.saveNativeMemoryProfile(
+                    name: parsed.name,
+                    endpoint: parsed.endpoint,
+                    secret: secret,
+                    secretStore: secretStore ?? ProcessSecretStore.default(environment: environment),
+                    replace: parsed.replace
+                )
+                return CLIResult(
+                    code: 0,
+                    stdout: "Saved memory connection \(parsed.name). Select it with --memory-profile \(parsed.name) when connecting.\n"
+                )
+            case "remove":
+                guard let parsed = RemoveArguments(arguments: Array(arguments.dropFirst(2))) else {
+                    return invalid()
+                }
+                try store.deleteMemoryProfile(
+                    name: parsed.name,
+                    secretStore: parsed.deleteSecret
+                        ? (secretStore ?? ProcessSecretStore.default(environment: environment))
+                        : nil,
+                    deleteSecret: parsed.deleteSecret
+                )
+                return CLIResult(
+                    code: 0,
+                    stdout: "Local memory connection removed. Its server-side token has not been revoked.\n"
+                )
+            default:
+                return invalid()
+            }
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The memory profile could not be updated.\n")
+        }
+    }
+
+    public static func runOllamaProfile(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?
+    ) -> CLIResult {
+        guard arguments.count >= 3, arguments[0] == "ollama", arguments[1] == "profile" else {
+            return invalid()
+        }
+        let store = ProfileStore(directory: stateDirectory)
+        do {
+            switch arguments[2] {
+            case "list":
+                guard arguments.count == 3 else { return invalid() }
+                let names = try store.listOllamaProfiles()
+                let output = names.isEmpty
+                    ? "No saved native connections. Run je ollama profile add --help.\n"
+                    : names.joined(separator: "\n") + "\n"
+                return CLIResult(code: 0, stdout: output)
+            case "show":
+                guard arguments.count == 4 else { return invalid() }
+                return encode(try store.loadPublicOllamaProfile(name: arguments[3]))
+            case "add":
+                guard let parsed = OllamaAddArguments(arguments: Array(arguments.dropFirst(3))) else {
+                    return invalid()
+                }
+                let secret = try secretValue(
+                    file: parsed.keyFile,
+                    environmentName: parsed.keyEnvironment,
+                    environment: environment,
+                    store: store,
+                    provideMessage: "Provide --key-file or --key-env when input is not interactive."
+                )
+                try store.saveNativeOllamaProfile(
+                    name: parsed.name,
+                    endpoint: parsed.endpoint,
+                    secret: secret,
+                    model: parsed.model,
+                    secretStore: secretStore ?? ProcessSecretStore.default(environment: environment),
+                    replace: parsed.replace
+                )
+                return CLIResult(
+                    code: 0,
+                    stdout: "Saved native connection \(parsed.name). Run je ollama --profile \(parsed.name) check.\n"
+                )
+            case "remove":
+                guard let parsed = RemoveArguments(arguments: Array(arguments.dropFirst(3))) else {
+                    return invalid()
+                }
+                try store.deleteOllamaProfile(
+                    name: parsed.name,
+                    secretStore: parsed.deleteSecret
+                        ? (secretStore ?? ProcessSecretStore.default(environment: environment))
+                        : nil,
+                    deleteSecret: parsed.deleteSecret
+                )
+                return CLIResult(
+                    code: 0,
+                    stdout: "Local native connection removed. Its server-side key has not been revoked.\n"
+                )
+            default:
+                return invalid()
+            }
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The native Ollama profile could not be updated.\n")
+        }
+    }
+
+    private static func secretValue(
+        file: String?,
+        environmentName: String?,
+        environment: [String: String],
+        store: ProfileStore,
+        provideMessage: String
+    ) throws -> String {
+        if let file {
+            return try store.readSecretFile(
+                at: URL(fileURLWithPath: (file as NSString).expandingTildeInPath)
+            )
+        }
+        if let environmentName {
+            return environment[environmentName] ?? ""
+        }
+        throw StateStoreError(provideMessage)
+    }
+
     private static func add(
         arguments: [String],
         store: ProfileStore,
@@ -147,6 +311,28 @@ public enum ProfileCommands {
         CLIResult(code: 2, stderr: invalidArguments)
     }
 
+    private static func flagValue(
+        argument: String,
+        arguments: [String],
+        index: inout Int,
+        flags: [String]
+    ) -> (String, String)? {
+        for flag in flags {
+            if argument == flag {
+                guard index + 1 < arguments.count else { return nil }
+                let value = arguments[index + 1]
+                index += 2
+                return (flag, value)
+            }
+            let prefix = flag + "="
+            if argument.hasPrefix(prefix) {
+                index += 1
+                return (flag, String(argument.dropFirst(prefix.count)))
+            }
+        }
+        return nil
+    }
+
     private struct AddArguments {
         let name: String
         let endpoint: String
@@ -239,6 +425,132 @@ public enum ProfileCommands {
                 }
             }
             return nil
+        }
+    }
+
+    private struct MemoryAddArguments {
+        let name: String
+        let endpoint: String
+        let tokenFile: String?
+        let tokenEnvironment: String?
+        let replace: Bool
+
+        init?(arguments: [String]) {
+            guard let name = arguments.first, !name.hasPrefix("-") else { return nil }
+            self.name = name
+            var endpoint: String?
+            var tokenFile: String?
+            var tokenEnvironment: String?
+            var replace = false
+            var index = 1
+            while index < arguments.count {
+                let argument = arguments[index]
+                if argument == "--replace" {
+                    guard !replace else { return nil }
+                    replace = true
+                    index += 1
+                    continue
+                }
+                guard let pair = ProfileCommands.flagValue(
+                    argument: argument,
+                    arguments: arguments,
+                    index: &index,
+                    flags: ["--endpoint", "--token-file", "--token-env"]
+                ), !pair.1.isEmpty else { return nil }
+                switch pair.0 {
+                case "--endpoint":
+                    guard endpoint == nil else { return nil }
+                    endpoint = pair.1
+                case "--token-file":
+                    guard tokenFile == nil && tokenEnvironment == nil else { return nil }
+                    tokenFile = pair.1
+                case "--token-env":
+                    guard tokenFile == nil && tokenEnvironment == nil else { return nil }
+                    tokenEnvironment = pair.1
+                default:
+                    return nil
+                }
+            }
+            guard let endpoint else { return nil }
+            self.endpoint = endpoint
+            self.tokenFile = tokenFile
+            self.tokenEnvironment = tokenEnvironment
+            self.replace = replace
+        }
+    }
+
+    private struct OllamaAddArguments {
+        let name: String
+        let endpoint: String
+        let model: String
+        let keyFile: String?
+        let keyEnvironment: String?
+        let replace: Bool
+
+        init?(arguments: [String]) {
+            guard let name = arguments.first, !name.hasPrefix("-") else { return nil }
+            self.name = name
+            var endpoint: String?
+            var model: String?
+            var keyFile: String?
+            var keyEnvironment: String?
+            var replace = false
+            var index = 1
+            while index < arguments.count {
+                let argument = arguments[index]
+                if argument == "--replace" {
+                    guard !replace else { return nil }
+                    replace = true
+                    index += 1
+                    continue
+                }
+                guard let pair = ProfileCommands.flagValue(
+                    argument: argument,
+                    arguments: arguments,
+                    index: &index,
+                    flags: ["--endpoint", "--model", "--key-file", "--key-env"]
+                ), !pair.1.isEmpty else { return nil }
+                switch pair.0 {
+                case "--endpoint":
+                    guard endpoint == nil else { return nil }
+                    endpoint = pair.1
+                case "--model":
+                    guard model == nil else { return nil }
+                    model = pair.1
+                case "--key-file":
+                    guard keyFile == nil && keyEnvironment == nil else { return nil }
+                    keyFile = pair.1
+                case "--key-env":
+                    guard keyFile == nil && keyEnvironment == nil else { return nil }
+                    keyEnvironment = pair.1
+                default:
+                    return nil
+                }
+            }
+            guard let endpoint, let model else { return nil }
+            self.endpoint = endpoint
+            self.model = model
+            self.keyFile = keyFile
+            self.keyEnvironment = keyEnvironment
+            self.replace = replace
+        }
+    }
+
+    private struct RemoveArguments {
+        let name: String
+        let deleteSecret: Bool
+
+        init?(arguments: [String]) {
+            if arguments.count == 1, let name = arguments.first, !name.hasPrefix("-") {
+                self.name = name
+                self.deleteSecret = false
+            } else if arguments.count == 2, let name = arguments.first,
+                      !name.hasPrefix("-"), arguments[1] == "--delete-secret" {
+                self.name = name
+                self.deleteSecret = true
+            } else {
+                return nil
+            }
         }
     }
 }
