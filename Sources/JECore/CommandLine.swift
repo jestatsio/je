@@ -17,7 +17,7 @@ public struct CLIResult: Equatable, Sendable {
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
     private static let legacyCommands: Set<String> = [
-        "setup", "connect", "run", "doctor", "export", "credential"
+        "setup", "connect", "run", "export", "credential"
     ]
 
     public static func run(
@@ -62,6 +62,8 @@ public enum JECommandLine {
             return supportMatrix(arguments: remaining)
         case "contracts":
             return contracts(arguments: remaining)
+        case "doctor":
+            return doctor(arguments: remaining, environment: environment)
         case "assignments":
             return AssignmentCommands.run(
                 arguments: remaining,
@@ -163,6 +165,68 @@ public enum JECommandLine {
         \(OracleContract.frozen.invalidArgumentBehavior)
 
         """)
+    }
+
+    private static func doctor(
+        arguments: [String],
+        environment: [String: String]
+    ) -> CLIResult {
+        guard arguments.count >= 2 else { return invalid() }
+        guard arguments[1] == "muse" else {
+            return CLIResult(
+                code: 2,
+                stderr: "This doctor command is not ported to the native core yet. Use the released Python client for now.\n"
+            )
+        }
+        var asJSON = false
+        var executable: String?
+        var index = 2
+        while index < arguments.count {
+            let argument = arguments[index]
+            if argument == "--json" {
+                asJSON = true
+                index += 1
+            } else if argument == "--executable" {
+                guard index + 1 < arguments.count, !arguments[index + 1].isEmpty else {
+                    return invalid()
+                }
+                executable = arguments[index + 1]
+                index += 2
+            } else if argument.hasPrefix("--executable=") {
+                let value = String(argument.dropFirst("--executable=".count))
+                guard !value.isEmpty else { return invalid() }
+                executable = value
+                index += 1
+            } else {
+                return invalid()
+            }
+        }
+        do {
+            let report = try MuseContractDiscovery().discover(
+                executableOverride: executable,
+                environment: environment
+            )
+            if asJSON {
+                return json(report)
+            }
+            let minimum = report.minimumKnownLocalMemoryBytes.map(String.init) ?? "unknown"
+            return CLIResult(code: 0, stdout: """
+            Muse version: \(report.version)
+            Interactive providers: \(report.interactiveProviders.joined(separator: ", "))
+            Headless providers: \(report.headlessProviders.joined(separator: ", "))
+            Authentication providers: \(report.authenticationProviders.joined(separator: ", "))
+            Local contract: \(report.localContractStatus)
+            Arbitrary local endpoint contract discovered: false
+            Physical memory bytes: \(report.physicalMemoryBytes)
+            Minimum known local memory bytes: \(minimum)
+            Evidence: \(report.evidenceReference)
+
+            """)
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "Muse contract discovery failed.\n")
+        }
     }
 
     private static func memory(
@@ -287,6 +351,7 @@ public enum JECommandLine {
       status [--json]          Show native core and support status
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
+      doctor muse [--json]     Probe public Muse local-contract signals without inference
       profile list             List saved connection names without credentials
       profile show NAME        Show public connection fields without credentials
       memory list              List saved memory connection names without tokens

@@ -43,6 +43,10 @@ foundation slice, not a claim that the launch platform is complete.
   matches. Catalog-bound Codex requires an exact version check, digest check,
   catalog validation, and a private exact-byte snapshot. Ask records a
   content-free completed or failed usage trace.
+- `je doctor muse` performs bounded, non-inference contract discovery from
+  public version and help surfaces. For Muse 1.4.14 it distinguishes the
+  gated built-in Glimmer route from an arbitrary local endpoint contract and
+  returns an evidence reference without claiming qualification.
 
 ## What this slice does not contain
 
@@ -65,6 +69,7 @@ swift run je status --json
 swift run je support-matrix --json
 swift run je contracts --json
 swift run je why --person alice --role fast --json -- "Explain this repo"
+swift run je doctor muse --json
 ```
 
 ## Next slices
