@@ -211,6 +211,7 @@ final class BoundedDataDelegate: NSObject, URLSessionDataDelegate, @unchecked Se
     private let limit: Int
     private var task: URLSessionDataTask?
     private var received = Data()
+    private var responseHeaders: [String: String] = [:]
     private var status: Int?
     private var failure: Error?
     private var exceeded = false
@@ -226,6 +227,10 @@ final class BoundedDataDelegate: NSObject, URLSessionDataDelegate, @unchecked Se
 
     var statusCode: Int? {
         lock.withLock { status }
+    }
+
+    var headers: [String: String] {
+        lock.withLock { responseHeaders }
     }
 
     var error: Error? {
@@ -257,7 +262,14 @@ final class BoundedDataDelegate: NSObject, URLSessionDataDelegate, @unchecked Se
         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
         if let http = response as? HTTPURLResponse {
-            lock.withLock { status = http.statusCode }
+            var captured: [String: String] = [:]
+            for (key, value) in http.allHeaderFields {
+                captured[String(describing: key).lowercased()] = String(describing: value)
+            }
+            lock.withLock {
+                status = http.statusCode
+                responseHeaders = captured
+            }
         }
         completionHandler(.allow)
     }

@@ -53,15 +53,10 @@ public enum ProfileCommands {
         arguments: [String],
         stateDirectory: URL,
         environment: [String: String],
-        secretStore: SecretStoring?
+        secretStore: SecretStoring?,
+        memoryTransport: MemoryHTTPTransport? = nil
     ) -> CLIResult {
         guard arguments.first == "memory", arguments.count >= 2 else { return invalid() }
-        if arguments[1] == "check" {
-            return CLIResult(
-                code: 2,
-                stderr: "This memory command is not ported to the native core yet. Use the released Python client for now.\n"
-            )
-        }
         let store = ProfileStore(directory: stateDirectory)
         do {
             switch arguments[1] {
@@ -75,6 +70,26 @@ public enum ProfileCommands {
             case "show":
                 guard arguments.count == 3 else { return invalid() }
                 return encode(try store.loadPublicMemoryProfile(name: arguments[2]))
+            case "check":
+                guard arguments.count == 3 else { return invalid() }
+                let profile = try store.loadResolvedMemoryProfile(
+                    name: arguments[2],
+                    secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+                )
+                do {
+                    let report = try MemoryConnectionChecker.check(
+                        profile: profile,
+                        transport: memoryTransport ?? URLSessionMemoryHTTPTransport()
+                    )
+                    let encoded = encode(report)
+                    return CLIResult(
+                        code: report.passed ? 0 : 1,
+                        stdout: encoded.stdout,
+                        stderr: encoded.stderr
+                    )
+                } catch let error as MemoryCheckError {
+                    return CLIResult(code: 2, stderr: error.message + "\n")
+                }
             case "add":
                 guard let parsed = MemoryAddArguments(arguments: Array(arguments.dropFirst(2))) else {
                     return invalid()

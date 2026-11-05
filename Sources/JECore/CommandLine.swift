@@ -31,7 +31,8 @@ public enum JECommandLine {
         musePhysicalMemoryBytes: UInt64? = nil,
         ollamaTransport: OllamaHTTPTransport? = nil,
         gatewayTransport: BoundedHTTPTransport? = nil,
-        builtInTransport: BuiltInHTTPTransport? = nil
+        builtInTransport: BuiltInHTTPTransport? = nil,
+        memoryTransport: MemoryHTTPTransport? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -123,7 +124,8 @@ public enum JECommandLine {
                     environment: environment
                 ),
                 environment: environment,
-                secretStore: secretStore
+                secretStore: secretStore,
+                memoryTransport: memoryTransport
             )
         case "ollama":
             return ollama(
@@ -545,6 +547,7 @@ public enum JECommandLine {
       memory list              List saved memory connection names without tokens
       memory show NAME         Show public memory fields without tokens
       memory add NAME ...      Save a memory connection with a native secret reference
+      memory check NAME        Initialize memory MCP and list tools without calling one
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
       ollama profile add NAME  Save a native Ollama connection with a secret reference

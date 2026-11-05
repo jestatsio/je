@@ -61,6 +61,10 @@ foundation slice, not a claim that the launch platform is complete.
 - `je ollama --profile NAME check` performs a bounded, no-redirect,
   non-inference native model listing check with the saved key. It reports only
   whether the default model is available.
+- `je memory check NAME` initializes the saved MCP connection and pages the
+  tool list inside bounded request, page, tool, and byte limits. It never
+  calls a memory tool and reports only protocol, count, and read or write
+  availability.
 - `je doctor muse` performs bounded, non-inference contract discovery from
   public version and help surfaces. For Muse 1.4.14 it distinguishes the
   gated built-in Glimmer route from an arbitrary local endpoint contract and
@@ -75,7 +79,7 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Memory connection checks, gateway protocol probes, native Ollama launch,
+- Gateway protocol probes, native Ollama launch,
   connect, run, export, or credential commands.
 - Muse arbitrary local endpoints, attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
