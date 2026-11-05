@@ -55,6 +55,9 @@ public protocol OllamaHTTPTransport: Sendable {
     func get(url: URL, bearerToken: String) throws -> OllamaHTTPResponse
 }
 
+public typealias BoundedHTTPResponse = OllamaHTTPResponse
+public typealias BoundedHTTPTransport = OllamaHTTPTransport
+
 public enum OllamaConnectionChecker {
     public static let maximumResponseBytes = 1_048_576
 

@@ -81,10 +81,10 @@ final class MuseContractDiscoveryTests: XCTestCase {
         XCTAssertFalse((result.stdout + result.stderr).contains(executable.path))
     }
 
-    func testOtherDoctorTargetsStayUnported() {
+    func testUnknownDoctorTargetIsInvalid() {
         let result = JECommandLine.run(["doctor", "codex"], environment: [:])
         XCTAssertEqual(result.code, 2)
-        XCTAssertTrue(result.stderr.contains("not ported"))
+        XCTAssertTrue(result.stderr.contains("Invalid arguments."))
     }
 
     private func environment(version: String) -> [String: String] {

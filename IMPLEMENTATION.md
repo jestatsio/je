@@ -47,6 +47,9 @@ foundation slice, not a claim that the launch platform is complete.
   exact qualified CLI version, the `muse-local-glimmer` protocol, the MLX
   engine family, and at least 64 GiB of physical memory. Ask records a
   content-free completed or failed usage trace.
+- `je doctor --profile NAME` performs a bounded, no-redirect, non-inference
+  gateway model listing check with the saved key. Protocol probes stay with
+  the Python client.
 - `je ollama --profile NAME check` performs a bounded, no-redirect,
   non-inference native model listing check with the saved key. It reports only
   whether the default model is available.
@@ -63,8 +66,8 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Memory connection checks, native Ollama launch, connect, run, doctor,
-  export, or credential commands.
+- Memory connection checks, gateway protocol probes, native Ollama launch,
+  connect, run, export, or credential commands.
 - Muse arbitrary local endpoints and built-in launch, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
   remote access. Unsupported launch cells fail closed after route display.

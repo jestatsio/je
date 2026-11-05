@@ -29,7 +29,8 @@ public enum JECommandLine {
         harnessRunner: HarnessRunning? = nil,
         stdoutSink: CLIOutputSink? = nil,
         musePhysicalMemoryBytes: UInt64? = nil,
-        ollamaTransport: OllamaHTTPTransport? = nil
+        ollamaTransport: OllamaHTTPTransport? = nil,
+        gatewayTransport: BoundedHTTPTransport? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -65,7 +66,13 @@ public enum JECommandLine {
         case "contracts":
             return contracts(arguments: remaining)
         case "doctor":
-            return doctor(arguments: remaining, environment: environment)
+            return doctor(
+                arguments: remaining,
+                explicitStateDirectory: explicitStateDirectory,
+                environment: environment,
+                secretStore: secretStore,
+                gatewayTransport: gatewayTransport
+            )
         case "assignments":
             return AssignmentCommands.run(
                 arguments: remaining,
@@ -183,13 +190,22 @@ public enum JECommandLine {
 
     private static func doctor(
         arguments: [String],
-        environment: [String: String]
+        explicitStateDirectory: String?,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        gatewayTransport: BoundedHTTPTransport?
     ) -> CLIResult {
         guard arguments.count >= 2 else { return invalid() }
         guard arguments[1] == "muse" else {
-            return CLIResult(
-                code: 2,
-                stderr: "This doctor command is not ported to the native core yet. Use the released Python client for now.\n"
+            return gatewayDoctor(
+                arguments: arguments,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore,
+                gatewayTransport: gatewayTransport
             )
         }
         var asJSON = false
@@ -240,6 +256,107 @@ public enum JECommandLine {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "Muse contract discovery failed.\n")
+        }
+    }
+
+    private static func gatewayDoctor(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        gatewayTransport: BoundedHTTPTransport?
+    ) -> CLIResult {
+        guard let parsed = GatewayDoctorArguments(arguments: Array(arguments.dropFirst())) else {
+            return invalid()
+        }
+        if parsed.harness != nil && !parsed.probe {
+            return CLIResult(code: 2, stderr: "Use --harness only with --probe.\n")
+        }
+        if parsed.probe {
+            return CLIResult(
+                code: 2,
+                stderr: "Gateway protocol probes are not ported to the native core yet. Use the released Python client for now.\n"
+            )
+        }
+        do {
+            let profile = try ProfileStore(directory: stateDirectory).loadResolvedProfile(
+                name: parsed.profile,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+            let report = try GatewayConnectionChecker.check(
+                profile: profile,
+                transport: gatewayTransport ?? URLSessionOllamaHTTPTransport()
+            )
+            if report.passed {
+                return CLIResult(code: 0, stdout: "Connected. Model \(profile.model) is available.\n")
+            }
+            return CLIResult(
+                code: 1,
+                stderr: "Connected, but the selected model is not available to this key.\n"
+            )
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch let error as GatewayCheckError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The gateway connection could not be checked.\n")
+        }
+    }
+
+    private struct GatewayDoctorArguments {
+        let profile: String
+        let probe: Bool
+        let harness: String?
+
+        init?(arguments: [String]) {
+            var profile: String?
+            var probe = false
+            var harness: String?
+            var index = 0
+            while index < arguments.count {
+                let argument = arguments[index]
+                if argument == "--probe" {
+                    guard !probe else { return nil }
+                    probe = true
+                    index += 1
+                    continue
+                }
+                if argument == "--profile" || argument.hasPrefix("--profile=") {
+                    guard profile == nil,
+                          let value = Self.value(argument: argument, flag: "--profile", arguments: arguments, index: &index),
+                          !value.isEmpty else { return nil }
+                    profile = value
+                    continue
+                }
+                if argument == "--harness" || argument.hasPrefix("--harness=") {
+                    guard harness == nil,
+                          let value = Self.value(argument: argument, flag: "--harness", arguments: arguments, index: &index),
+                          ["codex", "claude"].contains(value) else { return nil }
+                    harness = value
+                    continue
+                }
+                return nil
+            }
+            guard let profile else { return nil }
+            self.profile = profile
+            self.probe = probe
+            self.harness = harness
+        }
+
+        private static func value(
+            argument: String,
+            flag: String,
+            arguments: [String],
+            index: inout Int
+        ) -> String? {
+            if argument == flag {
+                guard index + 1 < arguments.count else { return nil }
+                let value = arguments[index + 1]
+                index += 2
+                return value
+            }
+            index += 1
+            return String(argument.dropFirst(flag.count + 1))
         }
     }
 
@@ -419,6 +536,7 @@ public enum JECommandLine {
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
       doctor muse [--json]     Probe public Muse local-contract signals without inference
+      doctor --profile NAME    Check a gateway key and model without inference
       profile list             List saved connection names without credentials
       profile show NAME        Show public connection fields without credentials
       memory list              List saved memory connection names without tokens
