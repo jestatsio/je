@@ -373,7 +373,7 @@ public final class OllamaLoopbackRelay: @unchecked Sendable {
 
     private static func shutdownFD(_ fd: Int32) {
         #if canImport(Glibc)
-        Glibc.shutdown(fd, Int32(SHUT_RDWR.rawValue))
+        Glibc.shutdown(fd, Int32(SHUT_RDWR))
         #else
         Darwin.shutdown(fd, SHUT_RDWR)
         #endif
