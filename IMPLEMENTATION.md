@@ -170,4 +170,5 @@ swift run je doctor muse --json
 Qualify more matrix cells one at a time, each on recorded evidence. The
 support matrix is updated only with qualification evidence, never by moving
 a failed cell out of scope after results are read. Studio-arrival work
-follows the roadmap build order.
+follows the roadmap build order. The dated gap audit and critical path live
+in [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md).

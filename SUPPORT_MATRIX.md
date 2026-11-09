@@ -1,6 +1,8 @@
 # Launch support matrix
 
-The machine-readable matrix in `JECore` is the source of truth. Print it with:
+The machine-readable matrix in `JECore` is the source of truth. The dated
+December gap audit lives in [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md).
+Print the matrix with:
 
 ```sh
 swift run je support-matrix --json

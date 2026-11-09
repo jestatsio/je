@@ -114,6 +114,7 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | [Sources/](Sources/) | The Swift user core and command line. |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | The native core implementation record and its limits. |
 | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) | The launch qualification matrix and its rules. |
+| [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md) | The December launch completeness audit, gaps, and critical path. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with SHA-256 checksums and build manifests. |
 
