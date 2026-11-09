@@ -16,9 +16,7 @@ public struct CLIResult: Equatable, Sendable {
 
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
-    private static let legacyCommands: Set<String> = [
-        "setup"
-    ]
+    private static let legacyCommands: Set<String> = []
 
     public static func run(
         _ arguments: [String],
@@ -35,7 +33,9 @@ public enum JECommandLine {
         gatewayProbeTransport: GatewayProbeTransport? = nil,
         builtInTransport: BuiltInHTTPTransport? = nil,
         memoryTransport: MemoryHTTPTransport? = nil,
-        currentExecutablePath: String? = nil
+        currentExecutablePath: String? = nil,
+        setupRunner: SetupCommandRunning? = nil,
+        setupConfirmer: SetupConfirming? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -64,6 +64,17 @@ public enum JECommandLine {
         case "--help", "-h", "help":
             guard remaining.count == 1 else { return invalid() }
             return CLIResult(code: 0, stdout: helpText)
+        case "setup":
+            guard let parsed = SetupArguments(arguments: Array(remaining.dropFirst())) else {
+                return invalid()
+            }
+            return SetupCommand.run(
+                configuration: parsed.configuration,
+                environment: environment,
+                runner: setupRunner ?? ProcessSetupCommandRunner(),
+                confirmer: setupConfirmer ?? TerminalSetupConfirmer(),
+                stdoutSink: stdoutSink
+            )
         case "status":
             return status(arguments: remaining)
         case "support-matrix":
@@ -522,6 +533,59 @@ public enum JECommandLine {
             return nil
         }
         return resolved.path
+    }
+
+    private struct SetupArguments {
+        let configuration: SetupConfiguration
+
+        init?(arguments: [String]) {
+            var client: SetupClient?
+            var clientSeen = false
+            var confirmed = false
+            var dryRun = false
+            var remove = false
+            var index = 0
+            while index < arguments.count {
+                let argument = arguments[index]
+                if argument == "--yes" {
+                    guard !confirmed else { return nil }
+                    confirmed = true
+                    index += 1
+                    continue
+                }
+                if argument == "--dry-run" {
+                    guard !dryRun else { return nil }
+                    dryRun = true
+                    index += 1
+                    continue
+                }
+                if argument == "--remove" {
+                    guard !remove else { return nil }
+                    remove = true
+                    index += 1
+                    continue
+                }
+                if argument == "--client" || argument.hasPrefix("--client=") {
+                    guard !clientSeen else { return nil }
+                    let value: String
+                    if argument == "--client" {
+                        guard index + 1 < arguments.count else { return nil }
+                        value = arguments[index + 1]
+                        index += 2
+                    } else {
+                        value = String(argument.dropFirst("--client=".count))
+                        index += 1
+                    }
+                    guard let parsed = SetupClient(rawValue: value) else { return nil }
+                    client = parsed
+                    clientSeen = true
+                    continue
+                }
+                return nil
+            }
+            configuration = SetupConfiguration(
+                client: client, confirmed: confirmed, dryRun: dryRun, remove: remove)
+        }
     }
 
     private struct ExportArguments {
@@ -1289,6 +1353,7 @@ public enum JECommandLine {
       doctor --profile NAME    Check a gateway key and model without inference
       credential --profile NAME Supply a saved key to a desktop credential helper
       export --profile NAME    Write desktop setup files for review
+      setup [--client C] [...] Add the Studio plugin to installed clients
       profile list             List saved connection names without credentials
       profile show NAME        Show public connection fields without credentials
       memory list              List saved memory connection names without tokens

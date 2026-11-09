@@ -17,11 +17,11 @@ final class JECoreTests: XCTestCase {
         XCTAssertFalse((result.stdout + result.stderr).contains("also-not-echoed"))
     }
 
-    func testLegacyCommandIsReportedAsNotPortedWithoutEcho() {
+    func testInvalidSetupClientIsRejectedWithoutEcho() {
         let canary = "synthetic-profile-name"
         let result = JECommandLine.run(["setup", "--client", canary])
         XCTAssertEqual(result.code, 2)
-        XCTAssertTrue(result.stderr.contains("not ported"))
+        XCTAssertTrue(result.stderr.contains("Invalid arguments"))
         XCTAssertFalse((result.stdout + result.stderr).contains(canary))
     }
 

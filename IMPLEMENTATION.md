@@ -26,6 +26,13 @@ foundation slice, not a claim that the launch platform is complete.
   harnesses, launch modes, execution places, and qualification status.
 - A user-artifact boundary model with a test that rejects host-only modules.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
+- `je setup` finds the installed Codex and Claude Code CLIs and adds the
+  Studio plugin through their native plugin managers, matching the Python
+  client: version and JSON capability checks, marketplace source
+  verification, displayed plans, `--yes` or interactive confirmation,
+  `--dry-run` inspection, post-change verification, and `--remove` while
+  keeping the marketplace registered. With setup ported, every Python user
+  command has a native counterpart.
 - Gateway, memory, and native Ollama profile list and show parity. Native
   writes keep credentials in platform secret storage. Gateway profiles use
   schema 3, including catalog-bound writes. Memory and Ollama profiles use
@@ -129,7 +136,6 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- A setup command.
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
