@@ -17,7 +17,7 @@ public struct CLIResult: Equatable, Sendable {
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
     private static let legacyCommands: Set<String> = [
-        "setup", "export"
+        "setup"
     ]
 
     public static func run(
@@ -34,7 +34,8 @@ public enum JECommandLine {
         gatewayTransport: BoundedHTTPTransport? = nil,
         gatewayProbeTransport: GatewayProbeTransport? = nil,
         builtInTransport: BuiltInHTTPTransport? = nil,
-        memoryTransport: MemoryHTTPTransport? = nil
+        memoryTransport: MemoryHTTPTransport? = nil,
+        currentExecutablePath: String? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -162,6 +163,17 @@ public enum JECommandLine {
                 environment: environment,
                 secretStore: secretStore,
                 harnessRunner: harnessRunner
+            )
+        case "export":
+            return desktopExport(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore,
+                currentExecutablePath: currentExecutablePath
             )
         case "credential":
             return credential(
@@ -406,6 +418,157 @@ public enum JECommandLine {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "The local health overview could not be built.\n")
+        }
+    }
+
+    private static func desktopExport(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        currentExecutablePath: String?
+    ) -> CLIResult {
+        guard arguments.first == "export" else { return invalid() }
+        guard let parsed = ExportArguments(arguments: Array(arguments.dropFirst())) else {
+            return invalid()
+        }
+        let store = ProfileStore(directory: stateDirectory)
+        let profile: ResolvedConnectionProfile
+        do {
+            profile = try store.loadResolvedProfile(
+                name: parsed.profile,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The saved connection could not be loaded.\n")
+        }
+        guard let helperPath = resolveExportHelper(
+            override: parsed.helperExecutable,
+            environment: environment,
+            currentExecutablePath: currentExecutablePath
+        ) else {
+            return CLIResult(code: 2, stderr: ExportError.helperUnavailable.message + "\n")
+        }
+        var catalogSnapshot: Data?
+        if let binding = profile.codexCatalog {
+            do {
+                catalogSnapshot = try CodexCatalogLoader.loadSnapshot(
+                    binding: binding,
+                    model: profile.model,
+                    contextWindow: profile.contextWindow,
+                    secret: profile.secret
+                )
+            } catch let error as CodexCatalogError {
+                return CLIResult(code: 2, stderr: error.message + "\n")
+            } catch {
+                return CLIResult(code: 2, stderr: "The saved connection could not be loaded.\n")
+            }
+        }
+        do {
+            let bundle = try DesktopExportWriter().writeBundle(
+                profile: profile,
+                catalogSnapshot: catalogSnapshot,
+                helperPath: helperPath,
+                stateDirectory: stateDirectory
+            )
+            return CLIResult(
+                code: 0,
+                stdout: "Desktop setup files saved to \(bundle.path). "
+                    + "Review README.md before applying them.\n"
+            )
+        } catch let error as ExportError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: ExportError.stateAccessFailed.message + "\n")
+        }
+    }
+
+    private static func resolveExportHelper(
+        override: String?,
+        environment: [String: String],
+        currentExecutablePath: String?
+    ) -> String? {
+        if let override {
+            guard override.hasPrefix("/"),
+                  isLaunchableFile(override, fileManager: FileManager.default) else {
+                return nil
+            }
+            return override
+        }
+        let candidate: URL?
+        if let currentExecutablePath, !currentExecutablePath.isEmpty {
+            candidate = URL(fileURLWithPath: currentExecutablePath)
+        } else if let argument = ProcessInfo.processInfo.arguments.first, !argument.isEmpty {
+            if argument.contains("/") {
+                let expanded = (argument as NSString).expandingTildeInPath
+                if expanded.hasPrefix("/") {
+                    candidate = URL(fileURLWithPath: expanded)
+                } else {
+                    candidate = URL(
+                        fileURLWithPath: FileManager.default.currentDirectoryPath)
+                        .appendingPathComponent(expanded)
+                }
+            } else {
+                candidate = searchExecutableOnPath(named: argument, environment: environment)
+            }
+        } else {
+            candidate = nil
+        }
+        guard let candidate else { return nil }
+        let resolved = candidate.resolvingSymlinksInPath().standardizedFileURL
+        guard isLaunchableFile(resolved.path, fileManager: FileManager.default) else {
+            return nil
+        }
+        return resolved.path
+    }
+
+    private struct ExportArguments {
+        let profile: String
+        let helperExecutable: String?
+
+        init?(arguments: [String]) {
+            var profile: String?
+            var helperExecutable: String?
+            var index = 0
+            while index < arguments.count {
+                let argument = arguments[index]
+                if argument == "--profile" || argument.hasPrefix("--profile=") {
+                    guard profile == nil,
+                          let value = Self.value(argument: argument, flag: "--profile", arguments: arguments, index: &index)
+                    else { return nil }
+                    profile = value
+                    continue
+                }
+                if argument == "--helper-executable" || argument.hasPrefix("--helper-executable=") {
+                    guard helperExecutable == nil,
+                          let value = Self.value(argument: argument, flag: "--helper-executable", arguments: arguments, index: &index)
+                    else { return nil }
+                    helperExecutable = value
+                    continue
+                }
+                return nil
+            }
+            guard let profile else { return nil }
+            self.profile = profile
+            self.helperExecutable = helperExecutable
+        }
+
+        private static func value(
+            argument: String,
+            flag: String,
+            arguments: [String],
+            index: inout Int
+        ) -> String? {
+            if argument == flag {
+                guard index + 1 < arguments.count else { return nil }
+                let value = arguments[index + 1]
+                index += 2
+                return value
+            }
+            index += 1
+            return String(argument.dropFirst(flag.count + 1))
         }
     }
 
@@ -1125,6 +1288,7 @@ public enum JECommandLine {
       doctor muse [--json]     Probe public Muse local-contract signals without inference
       doctor --profile NAME    Check a gateway key and model without inference
       credential --profile NAME Supply a saved key to a desktop credential helper
+      export --profile NAME    Write desktop setup files for review
       profile list             List saved connection names without credentials
       profile show NAME        Show public connection fields without credentials
       memory list              List saved memory connection names without tokens

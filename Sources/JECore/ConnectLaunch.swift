@@ -479,36 +479,7 @@ public struct ConnectLaunchPreparer: Sendable {
             .joined(separator: ", ") + "}"
     }
 
-    // Matches the oracle's JSON string encoding, which leaves slashes bare
-    // (JSONSerialization would emit "\/" inside Codex -c values).
     private func jsonString(_ value: String) -> String {
-        var result = "\""
-        for scalar in value.unicodeScalars {
-            switch scalar.value {
-            case 0x22:
-                result += "\\\""
-            case 0x5C:
-                result += "\\\\"
-            case 0x08:
-                result += "\\b"
-            case 0x09:
-                result += "\\t"
-            case 0x0A:
-                result += "\\n"
-            case 0x0C:
-                result += "\\f"
-            case 0x0D:
-                result += "\\r"
-            case 0x20...0x7E:
-                result.unicodeScalars.append(scalar)
-            case 0x00...0xFFFF:
-                result += String(format: "\\u%04x", scalar.value)
-            default:
-                let shifted = scalar.value - 0x10000
-                result += String(format: "\\u%04x\\u%04x", 0xD800 + shifted / 0x400, 0xDC00 + shifted % 0x400)
-            }
-        }
-        result += "\""
-        return result
+        OracleStringEscaping.jsonString(value)
     }
 }

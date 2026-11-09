@@ -74,6 +74,14 @@ foundation slice, not a claim that the launch platform is complete.
   credential helper, matching the Python client. It resolves embedded
   legacy keys and native secret references through the gateway profile
   loader and prints nothing else.
+- `je export --profile NAME` writes a desktop setup bundle for review under
+  `exports/<profile>/bundle-<random>` in the state directory, matching the
+  Python client byte for byte: a review README, manifest, Codex config
+  fragment, Claude Desktop inference config, and Claude Code settings
+  fragments, plus an exact catalog copy for catalog-bound profiles after
+  the saved binding is rechecked. Bundles contain no credentials; apps fetch
+  the key through the configured helper executable, which defaults to the
+  installed `je` or can be set with `--helper-executable`.
 - `je ollama --profile NAME check` performs a bounded, no-redirect,
   non-inference native model listing check with the saved key. It reports only
   whether the default model is available.
@@ -121,7 +129,7 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- An export command.
+- A setup command.
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or

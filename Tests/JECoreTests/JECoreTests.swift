@@ -19,7 +19,7 @@ final class JECoreTests: XCTestCase {
 
     func testLegacyCommandIsReportedAsNotPortedWithoutEcho() {
         let canary = "synthetic-profile-name"
-        let result = JECommandLine.run(["export", "--profile", canary])
+        let result = JECommandLine.run(["setup", "--client", canary])
         XCTAssertEqual(result.code, 2)
         XCTAssertTrue(result.stderr.contains("not ported"))
         XCTAssertFalse((result.stdout + result.stderr).contains(canary))
