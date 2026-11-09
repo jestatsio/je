@@ -17,7 +17,7 @@ public struct CLIResult: Equatable, Sendable {
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
     private static let legacyCommands: Set<String> = [
-        "setup", "connect", "export"
+        "setup", "export"
     ]
 
     public static func run(
@@ -143,6 +143,17 @@ public enum JECommandLine {
             )
         case "run":
             return genericRun(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore,
+                harnessRunner: harnessRunner
+            )
+        case "connect":
+            return connect(
                 arguments: remaining,
                 stateDirectory: stateDirectory(
                     explicit: explicitStateDirectory,
@@ -500,6 +511,183 @@ public enum JECommandLine {
             return CLIResult(code: code)
         } catch {
             return CLIResult(code: 2, stderr: startFailure)
+        }
+    }
+
+    private static func connect(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        harnessRunner: HarnessRunning?
+    ) -> CLIResult {
+        guard arguments.first == "connect" else { return invalid() }
+        guard let parsed = ConnectArguments(arguments: Array(arguments.dropFirst())) else {
+            return invalid()
+        }
+        let store = ProfileStore(directory: stateDirectory)
+        let loaded: ResolvedConnectionProfile
+        do {
+            loaded = try store.loadResolvedProfile(
+                name: parsed.profile,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The saved connection could not be loaded.\n")
+        }
+        // The oracle applies a differing --model by validating a replacement
+        // profile, which drops the saved context window and catalog binding
+        // for this session only.
+        var profile = loaded
+        if let override = parsed.model, !override.isEmpty, override != loaded.model {
+            guard Self.isValidModelName(override) else {
+                return CLIResult(
+                    code: 2,
+                    stderr: "A nonempty model name without control characters is required.\n")
+            }
+            guard !override.contains(loaded.secret) else {
+                return CLIResult(
+                    code: 2,
+                    stderr: "Keep gateway credentials separate from the endpoint and model name.\n")
+            }
+            profile = ResolvedConnectionProfile(
+                name: loaded.name,
+                endpoint: loaded.endpoint,
+                secret: loaded.secret,
+                model: override,
+                contextWindow: nil,
+                codexCatalog: nil
+            )
+        }
+        var memory: ResolvedMemoryProfile?
+        if let memoryName = parsed.memoryProfile {
+            do {
+                memory = try store.loadResolvedMemoryProfile(
+                    name: memoryName,
+                    secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+                )
+            } catch let error as StateStoreError {
+                return CLIResult(code: 2, stderr: error.message + "\n")
+            } catch {
+                return CLIResult(code: 2, stderr: "The saved connection could not be loaded.\n")
+            }
+        }
+        guard !parsed.trailing.contains(where: { $0.contains("\0") }) else {
+            return CLIResult(code: 2, stderr: "The harness process could not be started.\n")
+        }
+        let prepared: PreparedHarnessLaunch
+        do {
+            prepared = try ConnectLaunchPreparer().prepare(
+                harness: parsed.harness,
+                profile: profile,
+                memory: memory,
+                trailingArguments: parsed.trailing,
+                environment: environment,
+                executableOverride: parsed.executable
+            )
+        } catch let error as ConnectLaunchError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The harness launch could not be prepared.\n")
+        }
+        defer { prepared.cleanup() }
+        do {
+            let code = try (harnessRunner ?? ProcessHarnessRunner()).run(prepared.spec)
+            return CLIResult(code: code)
+        } catch {
+            return CLIResult(code: 2, stderr: "The harness process could not be started.\n")
+        }
+    }
+
+    private struct ConnectArguments {
+        let harness: ConnectHarness
+        let profile: String
+        let model: String?
+        let executable: String?
+        let memoryProfile: String?
+        let trailing: [String]
+
+        init?(arguments: [String]) {
+            // Like the oracle, split at the first -- before parsing flags;
+            // everything after it reaches the harness verbatim.
+            let head: [String]
+            var trailing: [String] = []
+            if let split = arguments.firstIndex(of: "--") {
+                head = Array(arguments[..<split])
+                trailing = Array(arguments[(split + 1)...])
+            } else {
+                head = arguments
+            }
+            var harness: ConnectHarness?
+            var profile: String?
+            var model: String?
+            var executable: String?
+            var memoryProfile: String?
+            var index = 0
+            while index < head.count {
+                let argument = head[index]
+                if argument == "--profile" || argument.hasPrefix("--profile=") {
+                    guard profile == nil,
+                          let value = Self.value(argument: argument, flag: "--profile", arguments: head, index: &index)
+                    else { return nil }
+                    profile = value
+                    continue
+                }
+                if argument == "--model" || argument.hasPrefix("--model=") {
+                    guard model == nil,
+                          let value = Self.value(argument: argument, flag: "--model", arguments: head, index: &index)
+                    else { return nil }
+                    model = value
+                    continue
+                }
+                if argument == "--executable" || argument.hasPrefix("--executable=") {
+                    guard executable == nil,
+                          let value = Self.value(argument: argument, flag: "--executable", arguments: head, index: &index)
+                    else { return nil }
+                    executable = value
+                    continue
+                }
+                if argument == "--memory-profile" || argument.hasPrefix("--memory-profile=") {
+                    guard memoryProfile == nil,
+                          let value = Self.value(argument: argument, flag: "--memory-profile", arguments: head, index: &index)
+                    else { return nil }
+                    memoryProfile = value
+                    continue
+                }
+                if argument.hasPrefix("-") {
+                    return nil
+                }
+                guard harness == nil, let parsed = ConnectHarness(rawValue: argument) else {
+                    return nil
+                }
+                harness = parsed
+                index += 1
+            }
+            guard let harness, let profile else { return nil }
+            self.harness = harness
+            self.profile = profile
+            self.model = model
+            self.executable = executable
+            self.memoryProfile = memoryProfile
+            self.trailing = trailing
+        }
+
+        private static func value(
+            argument: String,
+            flag: String,
+            arguments: [String],
+            index: inout Int
+        ) -> String? {
+            if argument == flag {
+                guard index + 1 < arguments.count else { return nil }
+                let value = arguments[index + 1]
+                index += 2
+                return value
+            }
+            index += 1
+            return String(argument.dropFirst(flag.count + 1))
         }
     }
 
@@ -949,6 +1137,7 @@ public enum JECommandLine {
       ollama --profile N check Check a native Ollama key and default model without inference
       ollama --profile N [...] Start the native Ollama CLI through a temporary loopback relay
       run --profile N -- CMD   Run another OpenAI-compatible client with the saved connection
+      connect codex|claude ... Open Codex or Claude Code with a saved connection
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
       assignments qualify ID   Run and store one bounded qualification task

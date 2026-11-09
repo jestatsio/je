@@ -90,6 +90,18 @@ foundation slice, not a claim that the launch platform is complete.
   the Python client: arguments after `--` pass through verbatim, the key is
   rejected in command arguments, a differing `--model` applies to this
   session only, and exit codes propagate as 128 plus the signal number.
+- `je connect codex|claude --profile NAME` opens the harness with the saved
+  gateway connection for one session, matching the Python client: a differing
+  `--model` applies to this session only and drops the saved context window
+  and catalog binding, arguments after `--` pass through verbatim, and exit
+  codes propagate as 128 plus the signal number. Catalog-bound Codex profiles
+  keep the exact version, digest, and private snapshot checks.
+  `--memory-profile NAME` attaches the saved memory MCP connection for the
+  session. Codex attachment requires the qualified `0.166.0-alpha.5.1` build
+  and a matching catalog binding when one is saved. Claude launches verify
+  `auth status` against temporary private settings before starting. Connect
+  replicates the oracle launch configuration exactly, which differs in places
+  from the `je ask` harness launch.
 - `je memory check NAME` initializes the saved MCP connection and pages the
   tool list inside bounded request, page, tool, and byte limits. It never
   calls a memory tool and reports only protocol, count, and read or write
@@ -108,7 +120,7 @@ foundation slice, not a claim that the launch platform is complete.
 
 ## What this slice does not contain
 
-- Connect or export commands.
+- An export command.
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
