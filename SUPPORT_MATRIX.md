@@ -21,6 +21,9 @@ path, one launch mode, and one execution place.
 
 The first published matrix has 112 cells. Muse headless cells are marked
 `blocked_on_contract_discovery`. Other unqualified cells are marked `planned`.
+As of 0.3.0 one cell is `qualified`:
+`fast/ollama/built_in/single_step/personal_machine`, on qualification
+evidence recorded 2026-11-09. See [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## Rules
 

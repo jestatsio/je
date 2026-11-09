@@ -26,7 +26,7 @@ The direction from here is local-first. A capable machine on your desk should ca
 
 ## Install
 
-You need an Apple silicon Mac with Homebrew. The packaged user client carries its own runtime, so you do not need Python or a source checkout.
+You need an Apple silicon Mac with Homebrew. The packaged user client is a native binary, so you do not need Python or a source checkout.
 
 ```sh
 brew install jestatsio/tap/je
@@ -62,6 +62,8 @@ Codex uses the same shape with its own tested route and reviewed model catalog. 
 | `je profile` | Saves and inspects named model connections. Keys never print. |
 | `je doctor` | Checks authentication and model availability, with an opt-in live probe. |
 | `je connect` | Opens Codex or Claude Code on a saved connection for one session. |
+| `je ask` | Routes one prompt to a qualified assignment and shows the route first. |
+| `je assignments` | Authors personal-machine assignments and records qualification evidence. |
 | `je memory` | Manages a separate personal memory connection, attached only on request. |
 | `je ollama` | Runs the native Ollama CLI through its own connection and a temporary local relay. |
 | `je run` | Hands a saved connection to any other OpenAI-compatible client. |
@@ -89,7 +91,7 @@ je checks the connection first, then hands the harness temporary session setting
 
 - **Explicit connections.** Today you choose the profile for every session. As the front door lands through `je ask`, layered policy resolves the route and je shows the person and profile, the chosen harness, model, and route, any attached memory, and where the work will run before anything starts. Explicit flags can override a soft preference, never a hard permission or privacy constraint. Installing je switches nothing on its own.
 - **Local first, cloud by choice.** A local route never falls back to a cloud model silently. People can configure their own cloud profiles, defaults, and escalation targets ahead of time, so a wanted cloud run or an approved escalation stays one explicit step.
-- **Credentials stay out of view.** Keys are prompted privately, stored in owner-only files, and never printed or passed as command arguments.
+- **Credentials stay out of view.** Keys are prompted privately, stored in macOS Keychain through the bundled secret helper, and never printed or passed as command arguments.
 - **The harness stays in charge.** Native instructions, tools, history, and approval settings keep working as they did before je arrived.
 - **Check before inference.** The default checks prove access and model availability without generating anything. A listed model still has to earn its place through real task trials.
 
@@ -105,13 +107,13 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | --- | --- |
 | [docs/](docs/) | The documentation site published at jestatsio.github.io/je. |
 | [plugins/je/](plugins/je/) | The shared connection, status, and memory skills for Codex and Claude Code. |
-| [Sources/](Sources/) | The experimental Swift user core and command line. |
-| [IMPLEMENTATION.md](IMPLEMENTATION.md) | The current native core build slice and its limits. |
+| [Sources/](Sources/) | The Swift user core and command line. |
+| [IMPLEMENTATION.md](IMPLEMENTATION.md) | The native core implementation record and its limits. |
 | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) | The launch qualification matrix and its rules. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with third-party notices and SHA-256 checksums. |
 
-The experimental native user core now develops here under Apache-2.0. The released user client remains the current packaged build until a native port passes its parity checks. Host and service operations stay private.
+The native user core develops here under Apache-2.0. As of 0.3.0 it is the released user client, replacing the Python 0.2.0 build in the Homebrew tap. Saved profiles and state files remain compatible. Host and service operations stay private.
 
 ## Service access
 

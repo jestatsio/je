@@ -53,6 +53,14 @@ final class JECoreTests: XCTestCase {
         XCTAssertEqual(Set(entries.map(\.executionPlace)), Set(ExecutionPlace.allCases))
     }
 
+    func testExactlyOneQualifiedCell() {
+        let qualified = SupportMatrix.launchEntries.filter { $0.status == .qualified }
+        XCTAssertEqual(qualified.map(\.id), ["fast/ollama/built_in/single_step/personal_machine"])
+        XCTAssertEqual(SupportMatrix.summary.countsByStatus["qualified"], 1)
+        XCTAssertEqual(SupportMatrix.summary.countsByStatus["planned"], 95)
+        XCTAssertEqual(SupportMatrix.summary.countsByStatus["blocked_on_contract_discovery"], 16)
+    }
+
     func testMuseHeadlessCellsNameTheContractGap() {
         let gaps = SupportMatrix.launchEntries.filter {
             $0.harness == .muse && $0.launchMode == .headless

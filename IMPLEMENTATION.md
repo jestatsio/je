@@ -1,22 +1,26 @@
 # Native core implementation
 
-This document records the first build slice after the Final roadmap. It is a
-foundation slice, not a claim that the launch platform is complete.
+This document records the native implementation through the 0.3.0 release,
+which replaces the Python client in the Homebrew tap. It is not a claim
+that the launch platform is complete.
 
 ## Settled implementation choices
 
 - The shared native core language is Swift.
 - The public user core is Apache-2.0 licensed from its first source release.
-- The private Python 0.2.0 client remains the behavior reference and test
-  oracle during the port.
+- The private Python 0.2.0 client was the behavior reference and test
+  oracle during the port. It remains available in the v0.2.0 release.
 - The user artifact must build without host-only workspace, network, or
   service-control modules.
 - Apple-only credential work lives in `je-secret-helper`. It uses macOS
   Keychain generic passwords through a narrow JSON stdin and stdout protocol.
-  Secrets never travel in process arguments. Signing and notarization of the
-  helper remain release work.
+  Secrets never travel in process arguments. Release builds sign both
+  binaries with a Developer ID identity (`io.jestats.je` and
+  `io.jestats.je-secret-helper`), hardened runtime, and a secure timestamp,
+  then notarize them through `scripts/release-macos.sh`, so the helper keeps
+  a stable Keychain identity across upgrades.
 
-## What this slice contains
+## What the native core contains
 
 - A SwiftPM package with a portable `JECore` library and a `je` executable.
 - Frozen oracle contract metadata for the Python profile schemas, public
@@ -134,14 +138,20 @@ foundation slice, not a claim that the launch platform is complete.
   identity, per-task results, exit codes, durations, and output digests. It
   marks an assignment qualified only on an explicit passing run.
 
-## What this slice does not contain
+## What it does not contain
 
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential migration, or
   remote access. Unsupported launch cells fail closed after route display.
-- Any qualified local model assignment. Matrix cells remain planned or blocked
-  until recorded qualification evidence exists.
+- More than one qualified matrix cell. The
+  `fast/ollama/built_in/single_step/personal_machine` cell is qualified on
+  `evidence:qualification:c7f949ad37209589a3fa353f88c8a026810281cb4a0abcc8fecdf6e69fb0156e`,
+  recorded 2026-11-09 for `studio-harness-qwen35:4b` on Ollama 0.40.15. The
+  bounded suite `bounded-builtin-tasks-v1` passed all three exact-answer
+  tasks, and `je ask --single-step` served a prompt through the route. The
+  other 111 cells remain planned or blocked until their own recorded
+  evidence exists.
 
 ## Local checks
 
@@ -155,9 +165,9 @@ swift run je why --person alice --role fast --json -- "Explain this repo"
 swift run je doctor muse --json
 ```
 
-## Next slices
+## Next work
 
-Port one oracle surface at a time. Each port needs parity checks against the
-Python behavior for that surface before new feature work builds on it. The
-support matrix is updated only with qualification evidence, never by moving a
-failed cell out of scope after results are read.
+Qualify more matrix cells one at a time, each on recorded evidence. The
+support matrix is updated only with qualification evidence, never by moving
+a failed cell out of scope after results are read. Studio-arrival work
+follows the roadmap build order.

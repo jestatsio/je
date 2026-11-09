@@ -162,15 +162,26 @@ public struct ProcessSecretStore: SecretStoring {
     }
 
     private static func resolveHelperURL(environment: [String: String]) -> URL? {
-        if let explicit = environment["JE_SECRET_HELPER"], !explicit.isEmpty {
-            return URL(fileURLWithPath: (explicit as NSString).expandingTildeInPath)
+        helperURL(
+            explicitPath: environment["JE_SECRET_HELPER"],
+            executablePath: ProcessInfo.processInfo.arguments.first,
+            pathValue: environment["PATH"]
+        )
+    }
+
+    static func helperURL(explicitPath: String?, executablePath: String?, pathValue: String?) -> URL? {
+        if let explicitPath, !explicitPath.isEmpty {
+            return URL(fileURLWithPath: (explicitPath as NSString).expandingTildeInPath)
         }
-        if let argument = ProcessInfo.processInfo.arguments.first, argument.contains("/") {
-            return URL(fileURLWithPath: argument)
+        if let executablePath, executablePath.contains("/") {
+            // Resolve symlinks so a Homebrew bin/je symlink finds the helper
+            // beside the real binary in libexec.
+            return URL(fileURLWithPath: executablePath)
+                .resolvingSymlinksInPath()
                 .deletingLastPathComponent()
                 .appendingPathComponent("je-secret-helper")
         }
-        let path = environment["PATH"] ?? ""
+        let path = pathValue ?? ""
         for directory in path.split(separator: ":") where !directory.isEmpty {
             let candidate = URL(fileURLWithPath: String(directory))
                 .appendingPathComponent("je-secret-helper")

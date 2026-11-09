@@ -134,13 +134,18 @@ public enum SupportMatrix {
                             ))
                         }
                     }
+                    // Qualified 2026-11-09 on recorded evidence; see IMPLEMENTATION.md.
+                    let builtInStatus: QualificationStatus =
+                        (role == .fast && engine == .ollama && place == .personalMachine)
+                        ? .qualified
+                        : .planned
                     entries.append(SupportMatrixEntry(
                         role: role,
                         engine: engine,
                         harness: .builtIn,
                         launchMode: .singleStep,
                         executionPlace: place,
-                        status: .planned
+                        status: builtInStatus
                     ))
                 }
             }
