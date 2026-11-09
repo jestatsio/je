@@ -73,12 +73,16 @@ final class HarnessLaunchTests: XCTestCase {
         XCTAssertEqual(prepared.spec.arguments.last, prompt)
         XCTAssertTrue(prepared.spec.arguments.contains("model_context_window=32768"))
         XCTAssertTrue(prepared.spec.arguments.contains("model_providers.je_studio.wire_api=\"responses\""))
+        XCTAssertTrue(prepared.spec.arguments.contains("model_providers.je_studio.name=\"J&E Studio\""))
+        XCTAssertTrue(prepared.spec.arguments.contains("model_providers.je_studio.requires_openai_auth=false"))
+        XCTAssertTrue(prepared.spec.arguments.contains(
+            "model_providers.je_studio.base_url=\"https://models.example.test/v1\""))
         XCTAssertFalse(prepared.spec.arguments.contains("exec"))
         XCTAssertNil(prepared.spec.environment["JE_GATEWAY_API_KEY"])
         XCTAssertFalse(prepared.spec.arguments.joined(separator: "\n").contains(secret))
     }
 
-    func testClaudeSpecVerifiesHelperAuthenticationAndCleansSettings() throws {
+    func testClaudeSpecVerifiesAuthenticationAndCleansSettings() throws {
         let script = """
         #!/bin/sh
         printf '%s' '{"loggedIn":true,"authMethod":"oauth_token","apiProvider":"firstParty"}'
@@ -92,12 +96,20 @@ final class HarnessLaunchTests: XCTestCase {
             executableOverride: executable.path
         )
         XCTAssertEqual(prepared.spec.arguments.suffix(2), ["--print", prompt])
-        XCTAssertEqual(prepared.spec.environment["CLAUDE_CODE_OAUTH_TOKEN"], secret)
-        XCTAssertNil(prepared.spec.environment["ANTHROPIC_API_KEY"])
+        XCTAssertEqual(prepared.spec.environment["CLAUDE_CODE_OAUTH_TOKEN"], "")
+        XCTAssertEqual(prepared.spec.environment["ANTHROPIC_API_KEY"], "")
+        XCTAssertEqual(prepared.spec.environment["ANTHROPIC_AUTH_TOKEN"], secret)
+        XCTAssertEqual(prepared.spec.environment["ANTHROPIC_BASE_URL"], "https://models.example.test")
+        XCTAssertEqual(prepared.spec.environment["CLAUDE_CODE_MAX_CONTEXT_TOKENS"], "32768")
         let settingsPath = try XCTUnwrap(prepared.spec.arguments.dropFirst().first)
         let settingsURL = URL(fileURLWithPath: settingsPath)
         XCTAssertEqual(try permissions(of: settingsURL), 0o600)
-        XCTAssertFalse(try String(contentsOf: settingsURL, encoding: .utf8).contains(secret))
+        let settingsText = try String(contentsOf: settingsURL, encoding: .utf8)
+        let settingsJSON = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(settingsText.utf8)) as? [String: Any])
+        XCTAssertEqual(
+            (settingsJSON["env"] as? [String: String])?["ANTHROPIC_AUTH_TOKEN"], secret)
+        XCTAssertFalse(prepared.spec.arguments.contains { $0.contains(secret) })
         let settingsDirectory = settingsURL.deletingLastPathComponent()
         prepared.cleanup()
         XCTAssertFalse(FileManager.default.fileExists(atPath: settingsDirectory.path))

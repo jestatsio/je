@@ -76,7 +76,8 @@ public struct ConnectLaunchPreparer: Sendable {
         memory: ResolvedMemoryProfile?,
         trailingArguments: [String],
         environment: [String: String],
-        executableOverride: String?
+        executableOverride: String?,
+        currentDirectoryURL: URL? = nil
     ) throws -> PreparedHarnessLaunch {
         if let memory, profile.model.contains(memory.secret) {
             throw ConnectLaunchError.credentialsInPublicMetadata
@@ -105,7 +106,8 @@ public struct ConnectLaunchPreparer: Sendable {
                 profile: profile,
                 memory: memory,
                 trailingArguments: trailingArguments,
-                environment: environment
+                environment: environment,
+                currentDirectoryURL: currentDirectoryURL
             )
         case .claudeCode:
             return try prepareClaude(
@@ -113,7 +115,8 @@ public struct ConnectLaunchPreparer: Sendable {
                 profile: profile,
                 memory: memory,
                 trailingArguments: trailingArguments,
-                environment: environment
+                environment: environment,
+                currentDirectoryURL: currentDirectoryURL
             )
         }
     }
@@ -123,7 +126,8 @@ public struct ConnectLaunchPreparer: Sendable {
         profile: ResolvedConnectionProfile,
         memory: ResolvedMemoryProfile?,
         trailingArguments: [String],
-        environment: [String: String]
+        environment: [String: String],
+        currentDirectoryURL: URL?
     ) throws -> PreparedHarnessLaunch {
         var temporaryDirectories: [URL] = []
         do {
@@ -216,7 +220,8 @@ public struct ConnectLaunchPreparer: Sendable {
             let spec = HarnessLaunchSpec(
                 executableURL: executable,
                 arguments: arguments,
-                environment: childEnvironment
+                environment: childEnvironment,
+                currentDirectoryURL: currentDirectoryURL
             )
             try validateNoCredentials(in: spec, profile: profile, memory: memory)
             return PreparedHarnessLaunch(spec: spec, temporaryDirectories: temporaryDirectories)
@@ -233,7 +238,8 @@ public struct ConnectLaunchPreparer: Sendable {
         profile: ResolvedConnectionProfile,
         memory: ResolvedMemoryProfile?,
         trailingArguments: [String],
-        environment: [String: String]
+        environment: [String: String],
+        currentDirectoryURL: URL?
     ) throws -> PreparedHarnessLaunch {
         let temporary = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -282,7 +288,8 @@ public struct ConnectLaunchPreparer: Sendable {
             let spec = HarnessLaunchSpec(
                 executableURL: executable,
                 arguments: arguments,
-                environment: childEnvironment
+                environment: childEnvironment,
+                currentDirectoryURL: currentDirectoryURL
             )
             try validateNoCredentials(in: spec, profile: profile, memory: memory)
             return PreparedHarnessLaunch(spec: spec, temporaryDirectories: [temporary])
@@ -335,89 +342,23 @@ public struct ConnectLaunchPreparer: Sendable {
         environment: [String: String],
         secrets: [String]
     ) throws {
-        let sanitized = environment.filter { key, value in
-            key != "JE_GATEWAY_API_KEY" && key != "JE_STUDIO_API_KEY"
-                && !secrets.contains(where: { value.contains($0) })
-        }
-        let process = Process()
-        let stdout = Pipe()
-        process.executableURL = executable
-        process.arguments = ["--version"]
-        process.environment = sanitized
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-
-        let timeoutState = VersionTimeoutState()
-        let timeout = DispatchWorkItem {
-            if process.isRunning {
-                timeoutState.markTimedOut()
-                process.terminate()
-            }
-        }
         do {
-            try process.run()
-        } catch {
-            throw ConnectLaunchError.versionUnrecognized
-        }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10, execute: timeout)
-        let data: Data
-        do {
-            data = try stdout.fileHandleForReading.read(upToCount: 4097) ?? Data()
-        } catch {
-            timeout.cancel()
-            if process.isRunning { process.terminate() }
-            throw ConnectLaunchError.versionUnrecognized
-        }
-        process.waitUntilExit()
-        timeout.cancel()
-        if timeoutState.timedOut {
-            throw ConnectLaunchError.versionTimedOut
-        }
-        guard process.terminationStatus == 0, data.count <= 4096,
-              let output = String(data: data, encoding: .utf8),
-              let version = Self.recognizedCodexVersion(in: output) else {
-            throw ConnectLaunchError.versionUnrecognized
-        }
-        guard version == requiredVersion else {
-            throw ConnectLaunchError.versionMismatch
-        }
-    }
-
-    // The oracle recognizes one line, "codex-cli X.Y.Z" with optional
-    // dot-separated prerelease and build identifiers, and compares the
-    // whole version string. Anything else is an unrecognized version.
-    private static func recognizedCodexVersion(in output: String) -> String? {
-        var line = output
-        while line.hasSuffix("\n") || line.hasSuffix("\r") {
-            line.removeLast()
-        }
-        guard line.hasPrefix("codex-cli ") else { return nil }
-        let version = String(line.dropFirst("codex-cli ".count))
-        let buildParts = version.split(separator: "+", omittingEmptySubsequences: false)
-        guard buildParts.count == 1 || buildParts.count == 2,
-              buildParts.allSatisfy({ !$0.isEmpty }) else { return nil }
-        if buildParts.count == 2 {
-            guard isIdentifierList(String(buildParts[1])) else { return nil }
-        }
-        let coreAndPrerelease = buildParts[0].split(
-            separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
-        if coreAndPrerelease.count == 2 {
-            guard isIdentifierList(String(coreAndPrerelease[1])) else { return nil }
-        }
-        let core = coreAndPrerelease[0].split(separator: ".", omittingEmptySubsequences: false)
-        guard core.count == 3,
-              core.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isASCII && $0.isNumber }) })
-        else { return nil }
-        return version
-    }
-
-    private static func isIdentifierList(_ value: String) -> Bool {
-        let identifiers = value.split(separator: ".", omittingEmptySubsequences: false)
-        return !identifiers.isEmpty && identifiers.allSatisfy { identifier in
-            !identifier.isEmpty && identifier.allSatisfy { character in
-                character.isASCII
-                    && (character.isLetter || character.isNumber || character == "-")
+            try CodexCatalogLoader.checkVersion(
+                executable: executable,
+                requiredVersion: requiredVersion,
+                environment: environment,
+                secrets: secrets
+            )
+        } catch let error as CodexCatalogError {
+            switch error {
+            case .versionMismatch:
+                throw ConnectLaunchError.versionMismatch
+            case .versionTimedOut:
+                throw ConnectLaunchError.versionTimedOut
+            case .versionUnavailable:
+                throw ConnectLaunchError.versionUnrecognized
+            case .invalid(let message):
+                throw ConnectLaunchError.catalogInvalid(message)
             }
         }
     }
@@ -569,18 +510,5 @@ public struct ConnectLaunchPreparer: Sendable {
         }
         result += "\""
         return result
-    }
-}
-
-private final class VersionTimeoutState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var flag = false
-
-    func markTimedOut() {
-        lock.withLock { flag = true }
-    }
-
-    var timedOut: Bool {
-        lock.withLock { flag }
     }
 }

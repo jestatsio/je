@@ -4,6 +4,7 @@ public enum CodexCatalogError: Error, Equatable, Sendable {
     case invalid(String)
     case versionMismatch
     case versionUnavailable
+    case versionTimedOut
 
     public var message: String {
         switch self {
@@ -12,7 +13,9 @@ public enum CodexCatalogError: Error, Equatable, Sendable {
         case .versionMismatch:
             return "The installed Codex version does not match the saved catalog binding."
         case .versionUnavailable:
-            return "The Codex version could not be verified; no session was started."
+            return "Codex did not return a recognized version; no session was started."
+        case .versionTimedOut:
+            return "The Codex version check timed out; no session was started."
         }
     }
 }
@@ -84,10 +87,11 @@ public enum CodexCatalogLoader {
         executable: URL,
         requiredVersion: String,
         environment: [String: String],
-        secret: String
+        secrets: [String]
     ) throws {
         let sanitized = environment.filter { key, value in
-            key != "JE_GATEWAY_API_KEY" && key != "JE_STUDIO_API_KEY" && !value.contains(secret)
+            key != "JE_GATEWAY_API_KEY" && key != "JE_STUDIO_API_KEY"
+                && !secrets.contains(where: { value.contains($0) })
         }
         let process = Process()
         let stdout = Pipe()
@@ -98,8 +102,10 @@ public enum CodexCatalogLoader {
         process.standardOutput = stdout
         process.standardError = FileHandle.nullDevice
 
+        let timeoutState = VersionTimeoutState()
         let timeout = DispatchWorkItem {
             if process.isRunning {
+                timeoutState.markTimedOut()
                 process.terminate()
             }
         }
@@ -119,23 +125,54 @@ public enum CodexCatalogLoader {
         }
         process.waitUntilExit()
         timeout.cancel()
+        if timeoutState.timedOut {
+            throw CodexCatalogError.versionTimedOut
+        }
         guard process.terminationStatus == 0, data.count <= 4096,
-              var output = String(data: data, encoding: .utf8) else {
+              let output = String(data: data, encoding: .utf8),
+              let version = recognizedVersion(in: output) else {
             throw CodexCatalogError.versionUnavailable
         }
-        if output.hasSuffix("\n") {
-            output.removeLast()
-            if output.hasSuffix("\r") {
-                output.removeLast()
-            }
-        }
-        guard !output.contains("\n"), !output.contains("\r"),
-              output.hasPrefix("codex-cli ") else {
-            throw CodexCatalogError.versionUnavailable
-        }
-        let version = String(output.dropFirst("codex-cli ".count))
         guard version == requiredVersion else {
             throw CodexCatalogError.versionMismatch
+        }
+    }
+
+    // The oracle recognizes one line, "codex-cli X.Y.Z" with optional
+    // dot-separated prerelease and build identifiers, and compares the
+    // whole version string. Anything else is an unrecognized version.
+    static func recognizedVersion(in output: String) -> String? {
+        var line = output
+        while line.hasSuffix("\n") || line.hasSuffix("\r") {
+            line.removeLast()
+        }
+        guard line.hasPrefix("codex-cli ") else { return nil }
+        let version = String(line.dropFirst("codex-cli ".count))
+        let buildParts = version.split(separator: "+", omittingEmptySubsequences: false)
+        guard buildParts.count == 1 || buildParts.count == 2,
+              buildParts.allSatisfy({ !$0.isEmpty }) else { return nil }
+        if buildParts.count == 2 {
+            guard isIdentifierList(String(buildParts[1])) else { return nil }
+        }
+        let coreAndPrerelease = buildParts[0].split(
+            separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        if coreAndPrerelease.count == 2 {
+            guard isIdentifierList(String(coreAndPrerelease[1])) else { return nil }
+        }
+        let core = coreAndPrerelease[0].split(separator: ".", omittingEmptySubsequences: false)
+        guard core.count == 3,
+              core.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isASCII && $0.isNumber }) })
+        else { return nil }
+        return version
+    }
+
+    private static func isIdentifierList(_ value: String) -> Bool {
+        let identifiers = value.split(separator: ".", omittingEmptySubsequences: false)
+        return !identifiers.isEmpty && identifiers.allSatisfy { identifier in
+            !identifier.isEmpty && identifier.allSatisfy { character in
+                character.isASCII
+                    && (character.isLetter || character.isNumber || character == "-")
+            }
         }
     }
 
@@ -297,5 +334,18 @@ public enum CodexCatalogLoader {
             return nil
         }
         return value as? String
+    }
+}
+
+private final class VersionTimeoutState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    func markTimedOut() {
+        lock.withLock { flag = true }
+    }
+
+    var timedOut: Bool {
+        lock.withLock { flag }
     }
 }

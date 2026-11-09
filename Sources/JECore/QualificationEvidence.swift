@@ -959,7 +959,7 @@ public struct QualificationEvidenceProducer: Sendable {
             return "connection_profile_required"
         case .modelMismatch:
             return "model_mismatch"
-        case .executableUnavailable:
+        case .executableUnavailable(_):
             return "executable_unavailable"
         case .catalogLaunchNotPorted:
             return "catalog_not_ported"
@@ -969,7 +969,9 @@ public struct QualificationEvidenceProducer: Sendable {
             return "catalog_version_mismatch"
         case .secretInArguments:
             return "secret_in_arguments"
-        case .authenticationFailed:
+        case .secretInExecutablePath:
+            return "secret_in_executable_path"
+        case .authenticationFailed(_):
             return "authentication_failed"
         case .localModelUnavailable:
             return "local_model_unavailable"

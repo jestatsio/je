@@ -99,9 +99,10 @@ foundation slice, not a claim that the launch platform is complete.
   `--memory-profile NAME` attaches the saved memory MCP connection for the
   session. Codex attachment requires the qualified `0.166.0-alpha.5.1` build
   and a matching catalog binding when one is saved. Claude launches verify
-  `auth status` against temporary private settings before starting. Connect
-  replicates the oracle launch configuration exactly, which differs in places
-  from the `je ask` harness launch.
+  `auth status` against temporary private settings before starting. The
+  `je ask` harness launch and assignment qualification share the same oracle
+  launch configuration, with the prompt passed as trailing harness arguments.
+  Harness-attached memory on `ask` routes remains unimplemented.
 - `je memory check NAME` initializes the saved MCP connection and pages the
   tool list inside bounded request, page, tool, and byte limits. It never
   calls a memory tool and reports only protocol, count, and read or write

@@ -116,7 +116,7 @@ final class CodexCatalogTests: XCTestCase {
                 "JE_STUDIO_API_KEY": secret,
                 "OTHER_VALUE": "prefix-\(secret)"
             ],
-            secret: secret
+            secrets: [secret]
         )
         let environmentDump = try String(contentsOf: dump, encoding: .utf8)
         XCTAssertFalse(environmentDump.contains(secret))
@@ -126,7 +126,7 @@ final class CodexCatalogTests: XCTestCase {
             executable: executable,
             requiredVersion: "0.167.0",
             environment: ["PATH": temporary.path, "JE_TEST_ENV_DUMP": dump.path],
-            secret: secret
+            secrets: [secret]
         )) { error in
             XCTAssertEqual(error as? CodexCatalogError, .versionMismatch)
         }

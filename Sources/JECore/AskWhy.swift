@@ -294,7 +294,7 @@ public enum AskWhyCommand {
                 launchStatus = "not_ported"
             case .connectionProfileRequired:
                 launchStatus = "connection_profile_required"
-            case .executableUnavailable:
+            case .executableUnavailable(_):
                 launchStatus = "executable_unavailable"
             case .catalogInvalid(_):
                 launchStatus = "catalog_invalid"
