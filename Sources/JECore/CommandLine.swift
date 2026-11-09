@@ -17,7 +17,7 @@ public struct CLIResult: Equatable, Sendable {
 public enum JECommandLine {
     private static let invalidArguments = "Invalid arguments. Run je --help or the command's --help.\n"
     private static let legacyCommands: Set<String> = [
-        "setup", "connect", "run", "export"
+        "setup", "connect", "export"
     ]
 
     public static func run(
@@ -140,6 +140,17 @@ public enum JECommandLine {
                 harnessRunner: harnessRunner,
                 ollamaTransport: ollamaTransport,
                 ollamaRelayUpstream: ollamaRelayUpstream
+            )
+        case "run":
+            return genericRun(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment,
+                secretStore: secretStore,
+                harnessRunner: harnessRunner
             )
         case "credential":
             return credential(
@@ -414,6 +425,163 @@ public enum JECommandLine {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "The saved credential could not be supplied.\n")
+        }
+    }
+
+    private static func genericRun(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        harnessRunner: HarnessRunning?
+    ) -> CLIResult {
+        guard arguments.first == "run" else { return invalid() }
+        guard let parsed = RunArguments(arguments: Array(arguments.dropFirst())) else {
+            return invalid()
+        }
+        let profile: ResolvedConnectionProfile
+        do {
+            profile = try ProfileStore(directory: stateDirectory).loadResolvedProfile(
+                name: parsed.profile,
+                secretStore: secretStore ?? ProcessSecretStore.default(environment: environment)
+            )
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The saved connection could not be loaded.\n")
+        }
+        // The oracle applies a differing --model by validating a replacement
+        // profile. Context window and catalog clearing have no observable
+        // effect here because the child receives only the model name.
+        var model = profile.model
+        if let override = parsed.model, !override.isEmpty, override != profile.model {
+            guard Self.isValidModelName(override) else {
+                return CLIResult(
+                    code: 2,
+                    stderr: "A nonempty model name without control characters is required.\n")
+            }
+            guard !override.contains(profile.secret) else {
+                return CLIResult(
+                    code: 2,
+                    stderr: "Keep gateway credentials separate from the endpoint and model name.\n")
+            }
+            model = override
+        }
+        guard !parsed.command.isEmpty else {
+            return CLIResult(code: 2, stderr: "Specify a command after --.\n")
+        }
+        let startFailure = "The operation failed; no credential or response contents were displayed.\n"
+        guard !parsed.command.contains(where: { $0.contains("\0") }) else {
+            return CLIResult(code: 2, stderr: startFailure)
+        }
+        guard !parsed.command.contains(where: { $0.contains(profile.secret) }) else {
+            return CLIResult(
+                code: 2,
+                stderr: "Do not place the gateway credential in command-line arguments.\n")
+        }
+        guard let executableURL = resolveGenericExecutable(
+            parsed.command[0], environment: environment) else {
+            return CLIResult(code: 2, stderr: startFailure)
+        }
+        guard !executableURL.path.contains(profile.secret) else {
+            return CLIResult(
+                code: 2,
+                stderr: "Do not place the gateway credential in the executable path.\n")
+        }
+        var childEnvironment = environment
+        childEnvironment["OPENAI_BASE_URL"] = profile.apiBase
+        childEnvironment["OPENAI_API_KEY"] = profile.secret
+        childEnvironment["OPENAI_MODEL"] = model
+        do {
+            let code = try (harnessRunner ?? ProcessHarnessRunner()).run(HarnessLaunchSpec(
+                executableURL: executableURL,
+                arguments: Array(parsed.command.dropFirst()),
+                environment: childEnvironment))
+            return CLIResult(code: code)
+        } catch {
+            return CLIResult(code: 2, stderr: startFailure)
+        }
+    }
+
+    private static func isValidModelName(_ model: String) -> Bool {
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed == model
+            && !model.unicodeScalars.contains { $0.value < 32 || $0.value == 127 }
+    }
+
+    static func resolveGenericExecutable(
+        _ command: String, environment: [String: String]
+    ) -> URL? {
+        guard !command.isEmpty else { return nil }
+        if command.contains("/") {
+            let url = URL(fileURLWithPath: command)
+            return isLaunchableFile(url.path, fileManager: FileManager.default) ? url : nil
+        }
+        var searchEnvironment = environment
+        if searchEnvironment["PATH"] == nil {
+            // Matches the oracle's subprocess search when PATH is absent.
+            searchEnvironment["PATH"] = "/bin:/usr/bin"
+        }
+        return searchExecutableOnPath(named: command, environment: searchEnvironment)
+    }
+
+    private struct RunArguments {
+        let profile: String
+        let model: String?
+        let command: [String]
+
+        init?(arguments: [String]) {
+            // The oracle splits the whole invocation at the first -- before
+            // parsing flags, so a flag value can never consume the separator.
+            let head: [String]
+            var command: [String] = []
+            if let split = arguments.firstIndex(of: "--") {
+                head = Array(arguments[..<split])
+                command = Array(arguments[(split + 1)...])
+            } else {
+                head = arguments
+            }
+            var profile: String?
+            var model: String?
+            var index = 0
+            while index < head.count {
+                let argument = head[index]
+                if argument == "--profile" || argument.hasPrefix("--profile=") {
+                    guard profile == nil,
+                          let value = Self.value(argument: argument, flag: "--profile", arguments: head, index: &index),
+                          !value.isEmpty else { return nil }
+                    profile = value
+                    continue
+                }
+                if argument == "--model" || argument.hasPrefix("--model=") {
+                    guard model == nil,
+                          let value = Self.value(argument: argument, flag: "--model", arguments: head, index: &index)
+                    else { return nil }
+                    model = value
+                    continue
+                }
+                return nil
+            }
+            guard let profile else { return nil }
+            self.profile = profile
+            self.model = model
+            self.command = command
+        }
+
+        private static func value(
+            argument: String,
+            flag: String,
+            arguments: [String],
+            index: inout Int
+        ) -> String? {
+            if argument == flag {
+                guard index + 1 < arguments.count else { return nil }
+                let value = arguments[index + 1]
+                index += 2
+                return value
+            }
+            index += 1
+            return String(argument.dropFirst(flag.count + 1))
         }
     }
 
@@ -780,6 +948,7 @@ public enum JECommandLine {
       ollama profile add NAME  Save a native Ollama connection with a secret reference
       ollama --profile N check Check a native Ollama key and default model without inference
       ollama --profile N [...] Start the native Ollama CLI through a temporary loopback relay
+      run --profile N -- CMD   Run another OpenAI-compatible client with the saved connection
       assignments list         List locally published assignment IDs
       assignments add ID ...   Publish one personal-machine assignment
       assignments qualify ID   Run and store one bounded qualification task
