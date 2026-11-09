@@ -12,6 +12,11 @@ Shipped user client: `je` 0.3.0.
 
 **Q26 status: not met today, and at risk for 2026-12-31.**
 
+Eric reconfirmed full platform completeness on 2026-11-09. The scope does
+not shrink to fit current evidence. December 31 remains the judgment date.
+An incomplete required system or matrix cell on that date means Q26 is not
+met under its own terms.
+
 Version 0.3.0 is a complete native replacement for the Python 0.2.0 user
 client. It is not yet the complete December launch platform settled in
 Q1 through Q25.
@@ -555,9 +560,8 @@ workflows.
 
 Target: before new Studio qualification results are read.
 
-- [ ] Decide whether Q26 platform completeness stays the December bar,
-  slips to a new date, or changes through an explicit new decision. The
-  current answer does not permit a quiet scope reduction.
+- [x] Keep full Q26 platform completeness as the December bar. Eric
+  reconfirmed this on 2026-11-09. No quiet scope reduction is authorized.
 - [ ] Settle the exact-assignment rule for calling one broad matrix cell
   complete. Name the minimum person, protocol, version, model, format,
   configuration, and place evidence required.
@@ -642,10 +646,12 @@ Target: 2026-12-31.
 
 ## Decisions Eric needs to make
 
-1. **Keep, slip, or revise Q26.** Current evidence does not support a
+1. **Full Q26 platform completeness. Settled again on 2026-11-09.** Eric
+   chose to keep the full scope. Current evidence still does not support a
    credible claim that every Q1 through Q25 system and all 112 cells will
-   be complete by 2026-12-31 without a major change in scope, staffing, or
-   already-existing private work that this audit cannot see.
+   be complete by 2026-12-31 without major acceleration or already-existing
+   private work that this audit cannot see. The risk stays recorded rather
+   than turning into an unapproved scope cut.
 2. **Define matrix completion semantics.** One exact personal assignment
    currently supports the one qualified broad cell. December needs a rule
    for how exact identities roll up to cells.
