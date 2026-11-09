@@ -26,14 +26,17 @@ The direction from here is local-first. A capable machine on your desk should ca
 
 ## Install
 
-You need an Apple silicon Mac with Homebrew. The packaged user client is a native binary, so you do not need Python or a source checkout.
+You need an Apple silicon Mac with Homebrew. je ships as a signed and notarized native binary. You do not need Python or a source checkout.
 
 ```sh
 brew install jestatsio/tap/je
+je --version
 je setup
 ```
 
 Setup finds your installed Codex and Claude Code CLIs and asks before adding the native je plugin to each one. Install those clients separately. Setup changes no model settings and attaches no memory.
+
+If 0.2.0 is already installed, run `brew upgrade jestatsio/tap/je` instead. Your saved profiles still load, and new profile writes store keys in macOS Keychain.
 
 ## Quickstart
 
@@ -63,6 +66,7 @@ Codex uses the same shape with its own tested route and reviewed model catalog. 
 | `je doctor` | Checks authentication and model availability, with an opt-in live probe. |
 | `je connect` | Opens Codex or Claude Code on a saved connection for one session. |
 | `je ask` | Routes one prompt to a qualified assignment and shows the route first. |
+| `je why` | Explains the selected qualified route without running anything. |
 | `je assignments` | Authors personal-machine assignments and records qualification evidence. |
 | `je memory` | Manages a separate personal memory connection, attached only on request. |
 | `je ollama` | Runs the native Ollama CLI through its own connection and a temporary local relay. |
@@ -89,7 +93,7 @@ je checks the connection first, then hands the harness temporary session setting
 
 ## Design principles
 
-- **Explicit connections.** Today you choose the profile for every session. As the front door lands through `je ask`, layered policy resolves the route and je shows the person and profile, the chosen harness, model, and route, any attached memory, and where the work will run before anything starts. Explicit flags can override a soft preference, never a hard permission or privacy constraint. Installing je switches nothing on its own.
+- **Explicit connections.** You choose the profile for every connected session. Through `je ask`, layered policy resolves the route instead, and je shows the person and profile, the chosen harness, model, and route, any attached memory, and where the work will run before anything starts. Only qualified assignments launch. Explicit flags can override a soft preference, never a hard permission or privacy constraint. Installing je switches nothing on its own.
 - **Local first, cloud by choice.** A local route never falls back to a cloud model silently. People can configure their own cloud profiles, defaults, and escalation targets ahead of time, so a wanted cloud run or an approved escalation stays one explicit step.
 - **Credentials stay out of view.** Keys are prompted privately, stored in macOS Keychain through the bundled secret helper, and never printed or passed as command arguments.
 - **The harness stays in charge.** Native instructions, tools, history, and approval settings keep working as they did before je arrived.
@@ -97,7 +101,7 @@ je checks the connection first, then hands the harness temporary session setting
 
 ## Where je is going
 
-The next stage turns je from a connection launcher into the front door for local AI work. That identity is now settled, and it is being built for the small trusted Studio group from day one. You run `je ask "..."`, layered policy resolves the initial route, je shows that route and why, and a local model does the work in a harness you already trust, on your own machine or in your Studio workspace. Cloud models stay available through each person's configured profiles and defaults for the jobs that need them. One codebase will ship that user front door separately from the operator host build on the Studio. The current release still works as the explicit launcher described above.
+The front door for local AI work shipped in 0.3.0, built for the small trusted Studio group from day one. You run `je ask "..."`, layered policy resolves the initial route, je shows that route and why, and a qualified local model does the work on your own machine or in your Studio workspace. One matrix cell is qualified today. The matrix grows one recorded qualification at a time, and the explicit launcher above still covers every other route. Cloud models stay available through each person's configured profiles and defaults for the jobs that need them. One codebase ships that user front door separately from the operator host build on the Studio.
 
 The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds the Final settled calls and a provisional build order for the Mac Studio arriving in December 2026. It covers routing, model roles and inference engines, qualification, background jobs, shared memory and its bounded offline cache, Keychain storage, and publishing the user core source.
 
@@ -111,7 +115,7 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | The native core implementation record and its limits. |
 | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) | The launch qualification matrix and its rules. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
-| [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with third-party notices and SHA-256 checksums. |
+| [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with SHA-256 checksums and build manifests. |
 
 The native user core develops here under Apache-2.0. As of 0.3.0 it is the released user client, replacing the Python 0.2.0 build in the Homebrew tap. Saved profiles and state files remain compatible. Host and service operations stay private.
 

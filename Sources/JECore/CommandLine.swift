@@ -1342,7 +1342,7 @@ public enum JECommandLine {
     private static let helpText = """
     usage: je [--version] [--state-dir DIR] <command>
 
-    Experimental native user core for je.
+    Native user core for je.
 
     Commands:
       status [--json]          Show native core and support status
@@ -1356,13 +1356,17 @@ public enum JECommandLine {
       setup [--client C] [...] Add the Studio plugin to installed clients
       profile list             List saved connection names without credentials
       profile show NAME        Show public connection fields without credentials
+      profile add NAME ...     Save a connection with a native secret reference
+      profile remove NAME      Remove a saved connection locally
       memory list              List saved memory connection names without tokens
       memory show NAME         Show public memory fields without tokens
       memory add NAME ...      Save a memory connection with a native secret reference
       memory check NAME        Initialize memory MCP and list tools without calling one
+      memory remove NAME       Remove a saved memory connection locally
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
       ollama profile add NAME  Save a native Ollama connection with a secret reference
+      ollama profile remove NAME Remove a saved native Ollama connection locally
       ollama --profile N check Check a native Ollama key and default model without inference
       ollama --profile N [...] Start the native Ollama CLI through a temporary loopback relay
       run --profile N -- CMD   Run another OpenAI-compatible client with the saved connection
@@ -1373,8 +1377,7 @@ public enum JECommandLine {
       why [flags] [--] PROMPT  Explain the selected qualified route without running it
       ask [flags] -- PROMPT    Select a route and launch its supported harness
 
-    Other released Python commands are not ported yet. Host administration stays
-    outside the user artifact.
+    Host administration stays outside the user artifact.
 
     """
 }
