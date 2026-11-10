@@ -6,7 +6,7 @@ Status owner: Eric Hare.
 
 Decision under audit: Q26 in [ROADMAP.md](ROADMAP.md).
 
-Shipped user client: `je` 0.3.1.
+Shipped user client: `je` 0.3.2.
 
 ## Verdict
 
@@ -219,7 +219,7 @@ lifecycle surface.
   assignments, storage use, and qualification status. Implemented
   read-only on `main` in
   [`ModelsInspection.swift`](Sources/JECore/ModelsInspection.swift) with
-  tests. A release carrying it is still pending.
+  tests. Shipped in 0.3.2.
 - [ ] Add explicit personal-machine lifecycle actions with previews for
   source, version, digest when available, format, size, destination,
   remaining space, and affected assignments.
@@ -309,9 +309,9 @@ exist. Advisory routing scores and memory proposals do not.
 
 - [x] Build the small signed native helper for Apple Foundation Models on
   the macOS side of a personal machine and the Studio. The
-  `je-foundation-helper` target is built on `main` and joins the signed
-  release set in [`release-macos.sh`](scripts/release-macos.sh). A
-  release carrying it is still pending. Studio proof follows the laptop.
+  `je-foundation-helper` target ships in the signed release set from
+  [`release-macos.sh`](scripts/release-macos.sh) as of 0.3.2, notarized
+  with the other bundled binaries. Studio proof follows the laptop.
 - [x] Qualify titling as its own task with provider, helper version,
   operating system build, and availability recorded. The predeclared
   three-case synthetic set in
@@ -637,7 +637,7 @@ Target: before 2026-12-10.
   stay `planned`, and no assignment was marked qualified.
 - [x] Add read-only `je models` inspection as the stable user surface for
   engines, artifacts, assignments, storage, and qualification status.
-  Done on `main`. Release pending.
+  Shipped in 0.3.2.
 - [x] Prototype the Apple Foundation Models helper in evaluation-only mode,
   or record an explicit decision that changes its December status. Done
   on `main`. Titling passed live. Advisory and memory tasks remain.
