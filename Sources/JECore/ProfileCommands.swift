@@ -7,7 +7,8 @@ public enum ProfileCommands {
         arguments: [String],
         stateDirectory: URL,
         environment: [String: String],
-        secretStore: SecretStoring?
+        secretStore: SecretStoring?,
+        gatewayTransport: BoundedHTTPTransport? = nil
     ) -> CLIResult {
         guard arguments.first == "profile", arguments.count >= 2 else {
             return invalid()
@@ -38,6 +39,17 @@ public enum ProfileCommands {
                     store: store,
                     environment: environment,
                     secretStore: secretStore
+                )
+            case "migrate":
+                guard let parsed = MigrateArguments(
+                    arguments: Array(arguments.dropFirst(2))
+                ) else { return invalid() }
+                return try migrateGateway(
+                    parsed: parsed,
+                    store: store,
+                    environment: environment,
+                    secretStore: secretStore,
+                    gatewayTransport: gatewayTransport
                 )
             default:
                 return invalid()
@@ -130,6 +142,17 @@ public enum ProfileCommands {
                     code: 0,
                     stdout: "Local memory connection removed. Its server-side token has not been revoked.\n"
                 )
+            case "migrate":
+                guard let parsed = MigrateArguments(
+                    arguments: Array(arguments.dropFirst(2))
+                ) else { return invalid() }
+                return try migrateMemory(
+                    parsed: parsed,
+                    store: store,
+                    environment: environment,
+                    secretStore: secretStore,
+                    memoryTransport: memoryTransport
+                )
             default:
                 return invalid()
             }
@@ -144,7 +167,8 @@ public enum ProfileCommands {
         arguments: [String],
         stateDirectory: URL,
         environment: [String: String],
-        secretStore: SecretStoring?
+        secretStore: SecretStoring?,
+        ollamaTransport: OllamaHTTPTransport? = nil
     ) -> CLIResult {
         guard arguments.count >= 3, arguments[0] == "ollama", arguments[1] == "profile" else {
             return invalid()
@@ -200,6 +224,17 @@ public enum ProfileCommands {
                     code: 0,
                     stdout: "Local native connection removed. Its server-side key has not been revoked.\n"
                 )
+            case "migrate":
+                guard let parsed = MigrateArguments(
+                    arguments: Array(arguments.dropFirst(3))
+                ) else { return invalid() }
+                return try migrateOllama(
+                    parsed: parsed,
+                    store: store,
+                    environment: environment,
+                    secretStore: secretStore,
+                    ollamaTransport: ollamaTransport
+                )
             default:
                 return invalid()
             }
@@ -208,6 +243,162 @@ public enum ProfileCommands {
         } catch {
             return CLIResult(code: 2, stderr: "The native Ollama profile could not be updated.\n")
         }
+    }
+
+    private static func migrateGateway(
+        parsed: MigrateArguments,
+        store: ProfileStore,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        gatewayTransport: BoundedHTTPTransport?
+    ) throws -> CLIResult {
+        let secrets = secretStore ?? ProcessSecretStore.default(environment: environment)
+        let transport = gatewayTransport ?? URLSessionOllamaHTTPTransport()
+        let results: [CredentialMigrationResult]
+        if let name = parsed.name {
+            results = [try CredentialMigrator.migrateGateway(
+                store: store, name: name, secretStore: secrets,
+                transport: transport, dryRun: parsed.dryRun
+            )]
+        } else {
+            results = try store.listProfiles().map { name in
+                do {
+                    return try CredentialMigrator.migrateGateway(
+                        store: store, name: name, secretStore: secrets,
+                        transport: transport, dryRun: parsed.dryRun
+                    )
+                } catch let error as StateStoreError {
+                    return CredentialMigrationResult(
+                        name: name, status: .failed, check: .notRun, detail: error.message
+                    )
+                }
+            }
+        }
+        return renderMigration(
+            report: CredentialMigrationReport(kind: "gateway", results: results),
+            json: parsed.json,
+            emptyMessage: "No saved connections to migrate.\n"
+        )
+    }
+
+    private static func migrateMemory(
+        parsed: MigrateArguments,
+        store: ProfileStore,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        memoryTransport: MemoryHTTPTransport?
+    ) throws -> CLIResult {
+        let secrets = secretStore ?? ProcessSecretStore.default(environment: environment)
+        let transport = memoryTransport ?? URLSessionMemoryHTTPTransport()
+        let results: [CredentialMigrationResult]
+        if let name = parsed.name {
+            results = [try CredentialMigrator.migrateMemory(
+                store: store, name: name, secretStore: secrets,
+                transport: transport, dryRun: parsed.dryRun
+            )]
+        } else {
+            results = try store.listMemoryProfiles().map { name in
+                do {
+                    return try CredentialMigrator.migrateMemory(
+                        store: store, name: name, secretStore: secrets,
+                        transport: transport, dryRun: parsed.dryRun
+                    )
+                } catch let error as StateStoreError {
+                    return CredentialMigrationResult(
+                        name: name, status: .failed, check: .notRun, detail: error.message
+                    )
+                }
+            }
+        }
+        return renderMigration(
+            report: CredentialMigrationReport(kind: "memory", results: results),
+            json: parsed.json,
+            emptyMessage: "No saved memory connections to migrate.\n"
+        )
+    }
+
+    private static func migrateOllama(
+        parsed: MigrateArguments,
+        store: ProfileStore,
+        environment: [String: String],
+        secretStore: SecretStoring?,
+        ollamaTransport: OllamaHTTPTransport?
+    ) throws -> CLIResult {
+        let secrets = secretStore ?? ProcessSecretStore.default(environment: environment)
+        let transport = ollamaTransport ?? URLSessionOllamaHTTPTransport()
+        let results: [CredentialMigrationResult]
+        if let name = parsed.name {
+            results = [try CredentialMigrator.migrateOllama(
+                store: store, name: name, secretStore: secrets,
+                transport: transport, dryRun: parsed.dryRun
+            )]
+        } else {
+            results = try store.listOllamaProfiles().map { name in
+                do {
+                    return try CredentialMigrator.migrateOllama(
+                        store: store, name: name, secretStore: secrets,
+                        transport: transport, dryRun: parsed.dryRun
+                    )
+                } catch let error as StateStoreError {
+                    return CredentialMigrationResult(
+                        name: name, status: .failed, check: .notRun, detail: error.message
+                    )
+                }
+            }
+        }
+        return renderMigration(
+            report: CredentialMigrationReport(kind: "ollama", results: results),
+            json: parsed.json,
+            emptyMessage: "No saved native connections to migrate.\n"
+        )
+    }
+
+    private static func renderMigration(
+        report: CredentialMigrationReport,
+        json: Bool,
+        emptyMessage: String
+    ) -> CLIResult {
+        let code: Int32 = report.hasFailures ? 1 : 0
+        if json {
+            let encoded = encode(report)
+            return CLIResult(code: code, stdout: encoded.stdout, stderr: encoded.stderr)
+        }
+        guard !report.results.isEmpty else {
+            return CLIResult(code: 0, stdout: emptyMessage)
+        }
+        var lines = report.results.map { result -> String in
+            switch result.status {
+            case .migrated:
+                return "\(result.name): migrated (check passed)"
+            case .alreadyMigrated:
+                return "\(result.name): already migrated"
+            case .wouldMigrate:
+                return "\(result.name): would migrate (dry run)"
+            case .failed:
+                let checkText: String
+                switch result.check {
+                case .passed:
+                    checkText = "check passed"
+                case .failed:
+                    checkText = "check failed"
+                case .notRun:
+                    checkText = "check not run"
+                }
+                return "\(result.name): failed (\(checkText)): "
+                    + (result.detail ?? "Migration did not complete.")
+            }
+        }
+        let summary = report.summary
+        lines.append(
+            "Note: older backups and exports may still contain embedded secrets. "
+                + "Review them separately."
+        )
+        lines.append(
+            "Migration: \(summary.migrated) migrated, "
+                + "\(summary.alreadyMigrated) already migrated, "
+                + "\(summary.failed) failed, \(summary.wouldMigrate) would migrate."
+        )
+        return CLIResult(code: code, stdout: lines.joined(separator: "\n") + "\n")
     }
 
     private static func secretValue(
@@ -548,6 +739,39 @@ public enum ProfileCommands {
             self.keyFile = keyFile
             self.keyEnvironment = keyEnvironment
             self.replace = replace
+        }
+    }
+
+    private struct MigrateArguments {
+        let name: String?
+        let dryRun: Bool
+        let json: Bool
+
+        init?(arguments: [String]) {
+            var name: String?
+            var all = false
+            var dryRun = false
+            var json = false
+            for argument in arguments {
+                switch argument {
+                case "--all":
+                    guard !all else { return nil }
+                    all = true
+                case "--dry-run":
+                    guard !dryRun else { return nil }
+                    dryRun = true
+                case "--json":
+                    guard !json else { return nil }
+                    json = true
+                default:
+                    guard !argument.hasPrefix("-"), name == nil else { return nil }
+                    name = argument
+                }
+            }
+            guard (name != nil) != all else { return nil }
+            self.name = name
+            self.dryRun = dryRun
+            self.json = json
         }
     }
 

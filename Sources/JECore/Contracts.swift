@@ -66,8 +66,7 @@ public struct StatusReport: Codable, Equatable, Sendable {
             excludedHostOnlyModules: ArtifactBoundary.hostOnlyModules.map(\.name),
             supportMatrix: SupportMatrix.summary,
             notes: [
-                "Experimental native core. Contracts are pre-1.0.",
-                "Legacy Python commands are not ported yet.",
+                "Native user core. Contracts are pre-1.0.",
                 "Status does not open profile storage or contact a service."
             ]
         )

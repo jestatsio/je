@@ -130,7 +130,8 @@ public enum JECommandLine {
                     environment: environment
                 ),
                 environment: environment,
-                secretStore: secretStore
+                secretStore: secretStore,
+                gatewayTransport: gatewayTransport
             )
         case "memory":
             return ProfileCommands.runMemory(
@@ -1075,7 +1076,8 @@ public enum JECommandLine {
                 arguments: arguments,
                 stateDirectory: directory,
                 environment: environment,
-                secretStore: secretStore
+                secretStore: secretStore,
+                ollamaTransport: ollamaTransport
             )
         }
         guard arguments.first == "ollama" else { return invalid() }
@@ -1358,15 +1360,18 @@ public enum JECommandLine {
       profile show NAME        Show public connection fields without credentials
       profile add NAME ...     Save a connection with a native secret reference
       profile remove NAME      Remove a saved connection locally
+      profile migrate NAME     Move an embedded key to native secret storage after a check
       memory list              List saved memory connection names without tokens
       memory show NAME         Show public memory fields without tokens
       memory add NAME ...      Save a memory connection with a native secret reference
       memory check NAME        Initialize memory MCP and list tools without calling one
       memory remove NAME       Remove a saved memory connection locally
+      memory migrate NAME      Move an embedded token to native secret storage after a check
       ollama profile list      List native Ollama connection names without credentials
       ollama profile show NAME Show public native Ollama fields without credentials
       ollama profile add NAME  Save a native Ollama connection with a secret reference
       ollama profile remove NAME Remove a saved native Ollama connection locally
+      ollama profile migrate NAME Move an embedded key to native secret storage after a check
       ollama --profile N check Check a native Ollama key and default model without inference
       ollama --profile N [...] Start the native Ollama CLI through a temporary loopback relay
       run --profile N -- CMD   Run another OpenAI-compatible client with the saved connection

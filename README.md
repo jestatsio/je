@@ -62,7 +62,7 @@ Codex uses the same shape with its own tested route and reviewed model catalog. 
 | Command | What it does |
 | --- | --- |
 | `je setup` | Detects installed clients and offers the native je plugin for each. |
-| `je profile` | Saves and inspects named model connections. Keys never print. |
+| `je profile` | Saves and inspects named model connections, and migrates embedded keys to native secret storage. Keys never print. |
 | `je doctor` | Checks authentication and model availability, with an opt-in live probe. |
 | `je connect` | Opens Codex or Claude Code on a saved connection for one session. |
 | `je ask` | Routes one prompt to a qualified assignment and shows the route first. |
@@ -115,6 +115,7 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | The native core implementation record and its limits. |
 | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) | The launch qualification matrix and its rules. |
 | [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md) | The December launch completeness audit, gaps, and critical path. |
+| [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md) | Settled measurement rules for December qualification. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with SHA-256 checksums and build manifests. |
 

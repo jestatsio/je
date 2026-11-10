@@ -346,6 +346,89 @@ public struct ProfileStore: Sendable {
         }
     }
 
+    public func commitGatewayMigration(
+        name: String,
+        reference: String,
+        expectedSecret: String
+    ) throws {
+        try validateProfileName(name)
+        guard SecretReferenceValidator.isValid(reference) else {
+            throw StateStoreError("The secret reference is invalid.")
+        }
+        let legacy = try loadLegacyProfile(name: name)
+        guard legacy.secretReference == nil, legacy.secret == expectedSecret else {
+            throw StateStoreError("The connection profile changed during migration; no profile was updated.")
+        }
+        let folder = try ensureFolder(named: "profiles")
+        let path = folder.appendingPathComponent(name + ".json")
+        let file = NativeProfileFile(
+            schemaVersion: 3,
+            endpoint: legacy.endpoint,
+            secretReference: reference,
+            model: legacy.model,
+            contextWindow: legacy.contextWindow,
+            codexCatalog: legacy.codexCatalog
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        var data = try encoder.encode(file)
+        data.append(10)
+        guard data.count <= 64 * 1024 else {
+            throw StateStoreError("The connection profile exceeds the supported size.")
+        }
+        try writePrivateJSONData(data, to: path, replace: true)
+    }
+
+    public func commitMemoryMigration(
+        name: String,
+        reference: String,
+        expectedSecret: String
+    ) throws {
+        try validateProfileName(name)
+        guard SecretReferenceValidator.isValid(reference) else {
+            throw StateStoreError("The secret reference is invalid.")
+        }
+        let legacy = try loadLegacyMemoryProfile(name: name)
+        guard legacy.secretReference == nil, legacy.secret == expectedSecret else {
+            throw StateStoreError("The memory profile changed during migration; no profile was updated.")
+        }
+        let folder = try ensureFolder(named: "memory-profiles")
+        let path = folder.appendingPathComponent(name + ".json")
+        let file = NativeMemoryProfileFile(
+            schemaVersion: 2,
+            endpoint: legacy.endpoint,
+            secretReference: reference,
+            serverName: legacy.serverName
+        )
+        let data = try encodeNativeProfile(file, sizeFailure: "The memory profile exceeds the supported size.")
+        try writePrivateJSONData(data, to: path, replace: true)
+    }
+
+    public func commitOllamaMigration(
+        name: String,
+        reference: String,
+        expectedSecret: String
+    ) throws {
+        try validateProfileName(name)
+        guard SecretReferenceValidator.isValid(reference) else {
+            throw StateStoreError("The secret reference is invalid.")
+        }
+        let legacy = try loadLegacyOllamaProfile(name: name)
+        guard legacy.secretReference == nil, legacy.secret == expectedSecret else {
+            throw StateStoreError("The native Ollama profile changed during migration; no profile was updated.")
+        }
+        let folder = try ensureFolder(named: "ollama-profiles")
+        let path = folder.appendingPathComponent(name + ".json")
+        let file = NativeOllamaProfileFile(
+            schemaVersion: 2,
+            endpoint: legacy.endpoint,
+            secretReference: reference,
+            model: legacy.model
+        )
+        let data = try encodeNativeProfile(file, sizeFailure: "The native Ollama profile exceeds the supported size.")
+        try writePrivateJSONData(data, to: path, replace: true)
+    }
+
     public func readSecretFile(at url: URL) throws -> String {
         let data = try readPrivateData(url)
         guard let text = String(data: data, encoding: .utf8) else {

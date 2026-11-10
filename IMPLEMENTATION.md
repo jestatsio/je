@@ -1,8 +1,10 @@
 # Native core implementation
 
 This document records the native implementation through the 0.3.0 release,
-which replaces the Python client in the Homebrew tap. It is not a claim
-that the launch platform is complete.
+which replaces the Python client in the Homebrew tap, plus the Q20
+credential migration prepared on `main` for the 0.3.1 patch. The 0.3.1
+release itself is still pending. This document is not a claim that the
+launch platform is complete.
 
 ## Settled implementation choices
 
@@ -42,6 +44,19 @@ that the launch platform is complete.
   schema 3, including catalog-bound writes. Memory and Ollama profiles use
   schema 2 secret references. Legacy embedded-secret files keep their strict
   private-file checks.
+- `je profile migrate`, `je memory migrate`, and
+  `je ollama profile migrate` move one legacy embedded secret at a time to
+  native secret storage under Q20: allocate a fresh reference, write the
+  secret, read back the exact value, run the bounded no-inference check for
+  that profile kind, then atomically switch the profile file to the
+  reference schema. Gateway migration also revalidates a saved Codex
+  catalog binding before switching. Any failure leaves the working profile
+  unchanged and removes the new secret. Already-migrated profiles are a
+  no-op without a check. `--all` migrates each saved profile in turn and
+  reports every result, `--dry-run` previews without writing or checking,
+  and `--json` prints the machine-readable report. Every report warns
+  that older backups and exports may still contain embedded secrets.
+  Secrets never print.
 - A deterministic routing policy core with hard filters, settled preference
   layers, explicit cloud authorization, replayable filter results, and traced
   advisory scores that do not change the starter route.
@@ -142,8 +157,9 @@ that the launch platform is complete.
 
 - Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
-  broker traffic, memory sync, history storage, credential migration, or
-  remote access. Unsupported launch cells fail closed after route display.
+  broker traffic, memory sync, history storage, credential rotation with a
+  pre-switch check, or remote access. Unsupported launch cells fail closed
+  after route display.
 - More than one qualified matrix cell. The
   `fast/ollama/built_in/single_step/personal_machine` cell is qualified on
   `evidence:qualification:c7f949ad37209589a3fa353f88c8a026810281cb4a0abcc8fecdf6e69fb0156e`,

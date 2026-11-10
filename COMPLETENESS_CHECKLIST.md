@@ -424,13 +424,18 @@ Status: **Partial**, with the macOS user-artifact foundation shipped.
   storage.
 - [x] Offer explicit secret deletion as a separate profile removal step
   through `--delete-secret`, with a reference-use check in the store.
-- [ ] Implement Q20 migration one profile at a time. Migration must
+- [x] Implement Q20 migration one profile at a time. Migration must
   allocate a fresh reference, write the secret, read back the exact value,
   run a no-inference check, atomically switch the profile, and only then
   remove the embedded secret. A failure must leave the working profile
-  unchanged and produce a per-profile report.
-- [ ] Warn during migration that older backups and exports may still hold
-  embedded secrets.
+  unchanged and produce a per-profile report. Implemented on `main` for
+  all three profile kinds in
+  [`CredentialMigration.swift`](Sources/JECore/CredentialMigration.swift)
+  with tests in
+  [`CredentialMigrationTests.swift`](Tests/JECoreTests/CredentialMigrationTests.swift).
+  The 0.3.1 release that ships it is still pending.
+- [x] Warn during migration that older backups and exports may still hold
+  embedded secrets. Every migration report carries the warning.
 - [ ] Prove rotation by verifying a replacement before switching the
   reference for every profile kind. Manual replacement exists through
   profile rewrite, but it is not yet the settled migration and rotation
@@ -562,33 +567,39 @@ Target: before new Studio qualification results are read.
 
 - [x] Keep full Q26 platform completeness as the December bar. Eric
   reconfirmed this on 2026-11-09. No quiet scope reduction is authorized.
-- [ ] Settle the exact-assignment rule for calling one broad matrix cell
-  complete. Name the minimum person, protocol, version, model, format,
-  configuration, and place evidence required.
-- [ ] Decide whether protocol becomes an explicit matrix dimension or
-  remains part of exact assignment evidence under each broad cell.
-- [ ] Choose the qualification evidence registry, owner, backup, retention,
-  and reviewer access path. Local laptop state is not enough for a
-  December audit.
+- [x] Settle the exact-assignment rule for calling one broad matrix cell
+  complete. Eric approved [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md) D1
+  on 2026-11-09: one current exact pass completes the cell.
+- [x] Decide whether protocol becomes an explicit matrix dimension or
+  remains part of exact assignment evidence under each broad cell. D2
+  keeps protocol in exact evidence. The matrix stays at five dimensions.
+- [x] Choose the qualification evidence registry, owner, backup, retention,
+  and reviewer access path. D3 names the private committed copy as the
+  December record. The export step that fills it is still to build.
 - [ ] Settle candidate workflows W1 through W6 or replace them. Freeze
-  fixtures and pass rules before trial results are read.
-- [ ] Decide the deadline for declaring any Muse launch mode unsupported
-  if bounded trials prove no native route. The current blocked status is
-  honest, but it blocks 16 cells.
-- [ ] Rank Q10, Q11, Q12, Q16, Q17, Q19, Q22, and Q24 against the time
-  left. Under current Q26, deferring any one of them means December
-  completeness fails even if daily workflows work.
-- [ ] Name the private evidence Eric will supply for host build, Studio
-  services, workspaces, onboarding, and remote access. This public audit
-  cannot close those rows by inference.
+  fixtures and pass rules before trial results are read. D4 adopts
+  W1 through W6. Fixtures are not frozen yet, and the W3 and W4
+  participants are still to be named. Eric has no candidates yet.
+- [x] Decide the deadline for declaring any Muse launch mode unsupported
+  if bounded trials prove no native route. D5 sets 2026-12-05.
+- [x] Rank Q10, Q11, Q12, Q16, Q17, Q19, Q22, and Q24 against the time
+  left. D6 records the build order. Under current Q26, deferring any
+  one of them still means December completeness fails.
+- [x] Name the private evidence Eric will supply for host build, Studio
+  services, workspaces, onboarding, and remote access. D7 names the
+  packet per system. The packets themselves are still to supply. This
+  public audit cannot close those rows by inference.
 
 ### Gate B. Finish laptop-stage foundations before Studio arrival
 
 Target: before 2026-12-10.
 
-- [ ] Implement Q20 credential migration and ship it with the help-text
-  correction already on `main` as a small patch release. The public
-  installed 0.3.0 binary still prints the old experimental help lines.
+- [ ] Ship the implemented Q20 credential migration with the help-text
+  correction already on `main` as the 0.3.1 patch release. Migration,
+  the corrected help text, refreshed status notes, and the 0.3.1 version
+  bump are in the tree. The signed and notarized release and Homebrew
+  tap update are still pending. The public installed 0.3.0 binary still
+  prints the old experimental help lines.
 - [ ] Add versioned loading for trusted project policy, personal defaults,
   operator defaults, never-cloud state, and cloud intent. Route traces
   need to name each loaded source without copying secrets.
@@ -652,23 +663,22 @@ Target: 2026-12-31.
    be complete by 2026-12-31 without major acceleration or already-existing
    private work that this audit cannot see. The risk stays recorded rather
    than turning into an unapproved scope cut.
-2. **Define matrix completion semantics.** One exact personal assignment
-   currently supports the one qualified broad cell. December needs a rule
-   for how exact identities roll up to cells.
-3. **Choose the evidence home.** Qualification records need durable,
-   backed-up, reviewable storage with clear privacy boundaries.
-4. **Settle named workflows and participants.** W1 through W6 are
-   candidates only. Their fixtures and pass rules need to exist before
-   trial results carry December weight.
-5. **Set the Muse unsupported deadline.** Sixteen cells should not stay
-   blocked by default until late December.
-6. **Choose the next engineering slice after credential migration.** The
-   strongest candidates are routing-default loading, `je models`, Muse
-   contract trials, and evaluation-only Foundation Models. Doing all four
-   before the Studio arrives needs an explicit priority call.
-7. **Name the private evidence packet.** Host build, memory service,
-   workspace, onboarding, and network rows need test output or service
-   records that a reviewer can inspect.
+2. **Matrix completion semantics. Settled in Gate A D1 and D2.** One
+   current exact pass completes a broad cell. Protocol stays in exact
+   evidence.
+3. **Evidence home. Settled in Gate A D3.** A private committed copy is
+   the December record. The export step is still to build.
+4. **Named workflows adopted. Participants still open.** D4 adopts
+   W1 through W6. Fixtures still need a freeze, and Eric has no W3 or
+   W4 participants yet.
+5. **Muse unsupported deadline. Settled in Gate A D5.** Decide by
+   2026-12-05 on laptop trial evidence.
+6. **Next engineering order. Settled by Eric on 2026-11-09.** After
+   credential migration: Q10 `je models` first, then Q13 Muse contract
+   trials, then Q11 evaluation-only Foundation Models. Gate A was
+   approved on 2026-11-09 in [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md).
+7. **Private evidence packet. Named in Gate A D7.** The packets
+   themselves are still to supply.
 
 ## Audit evidence index
 
