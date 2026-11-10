@@ -1,9 +1,11 @@
 # Native core implementation
 
-This document records the native implementation through the 0.3.1 release.
+This document records the native implementation through the 0.3.2 release.
 Version 0.3.0 replaced the Python client in the Homebrew tap. Version
-0.3.1 adds the Q20 credential migration. This document is not a claim
-that the launch platform is complete.
+0.3.1 adds the Q20 credential migration. Version 0.3.2 adds `je models`,
+evaluation-only `je triage`, the trial-backed Muse matrix update, and
+versioned routing policy loading. This document is not a claim that
+the launch platform is complete.
 
 ## Settled implementation choices
 
