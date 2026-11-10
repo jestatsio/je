@@ -77,6 +77,15 @@ public enum JECommandLine {
             )
         case "status":
             return status(arguments: remaining)
+        case "models":
+            return models(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                environment: environment
+            )
         case "support-matrix":
             return supportMatrix(arguments: remaining)
         case "contracts":
@@ -227,6 +236,42 @@ public enum JECommandLine {
         Host-only modules excluded \(ArtifactBoundary.hostOnlyModules.count)
 
         """)
+    }
+
+    private static func models(
+        arguments: [String],
+        stateDirectory: URL,
+        environment: [String: String]
+    ) -> CLIResult {
+        let asJSON: Bool
+        if arguments == ["models", "--json"] {
+            asJSON = true
+        } else if arguments == ["models"] {
+            asJSON = false
+        } else {
+            return invalid()
+        }
+        let home: URL
+        if let raw = environment["HOME"], !raw.isEmpty {
+            home = URL(fileURLWithPath: (raw as NSString).expandingTildeInPath, isDirectory: true)
+        } else {
+            home = FileManager.default.homeDirectoryForCurrentUser
+        }
+        do {
+            let report = try ModelsInspectionBuilder.build(
+                stateDirectory: stateDirectory,
+                environment: environment,
+                homeDirectory: home
+            )
+            if asJSON {
+                return json(report)
+            }
+            return CLIResult(code: 0, stdout: ModelsInspectionBuilder.render(report))
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The models inventory could not be built.\n")
+        }
     }
 
     private static func supportMatrix(arguments: [String]) -> CLIResult {
@@ -1348,6 +1393,7 @@ public enum JECommandLine {
 
     Commands:
       status [--json]          Show native core and support status
+      models [--json]          Inspect engines, artifacts, assignments, and storage
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
       doctor [--json]          Show a local health overview without contacting a service

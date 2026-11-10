@@ -218,9 +218,11 @@ lifecycle surface.
   LM Studio, and llama.cpp as distinct protocol and lifecycle surfaces.
   The MLX name appears today in matrix identity and in the gated Muse
   built-in Glimmer checks, not in a general MLX serving adapter.
-- [ ] Add user-facing `je models` inspection for engines, artifacts,
-  assignments, storage use, and qualification status. No `models` command
-  exists in [`CommandLine.swift`](Sources/JECore/CommandLine.swift).
+- [x] Add user-facing `je models` inspection for engines, artifacts,
+  assignments, storage use, and qualification status. Implemented
+  read-only on `main` in
+  [`ModelsInspection.swift`](Sources/JECore/ModelsInspection.swift) with
+  tests. A release carrying it is still pending.
 - [ ] Add explicit personal-machine lifecycle actions with previews for
   source, version, digest when available, format, size, destination,
   remaining space, and affected assignments.
@@ -609,8 +611,9 @@ Target: before 2026-12-10.
 - [ ] Attempt harness qualification on routes honestly available from the
   laptop. A failed local-model result stays failed or planned. The point
   is early blocker discovery, not a forced pass.
-- [ ] Add read-only `je models` inspection as the stable user surface for
+- [x] Add read-only `je models` inspection as the stable user surface for
   engines, artifacts, assignments, storage, and qualification status.
+  Done on `main`. Release pending.
 - [ ] Prototype the Apple Foundation Models helper in evaluation-only mode,
   or record an explicit decision that changes its December status.
 - [ ] Design the broker registry, memory sync contract, history redaction

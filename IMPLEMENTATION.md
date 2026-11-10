@@ -31,6 +31,14 @@ that the launch platform is complete.
   harnesses, launch modes, execution places, and qualification status.
 - A user-artifact boundary model with a test that rejects host-only modules.
 - `status`, `support-matrix`, and `contracts` commands with JSON output.
+- `je models` read-only inspection (also `--json`): per-engine PATH
+  presence, dedicated model-store size where one exists by convention,
+  matrix and assignment qualification rollups, distinct published model
+  artifacts, exact assignment identities, and state-directory storage by
+  area. It reads file sizes only. It never resolves secret values,
+  contacts a service, launches an engine, or runs inference. Executable
+  presence means found on PATH, not healthy. Mutating lifecycle actions
+  remain unimplemented.
 - `je setup` finds the installed Codex and Claude Code CLIs and adds the
   Studio plugin through their native plugin managers, matching the Python
   client: version and JSON capability checks, marketplace source
