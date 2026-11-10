@@ -6,6 +6,7 @@ public struct RouteExplanation: Codable, Equatable, Sendable {
     public let selectedCandidate: RouteCandidate?
     public let decision: RouteDecision
     public let memoryProfileName: String?
+    public let policySources: [PolicySourceRecord]
 }
 
 public struct AskResult: Codable, Equatable, Sendable {
@@ -32,7 +33,8 @@ public enum AskWhyCommand {
         stdoutSink: CLIOutputSink? = nil,
         musePhysicalMemoryBytes: UInt64? = nil,
         builtInTransport: BuiltInHTTPTransport? = nil,
-        memoryTransport: MemoryHTTPTransport? = nil
+        memoryTransport: MemoryHTTPTransport? = nil,
+        currentDirectoryURL: URL? = nil
     ) -> CLIResult {
         guard command == "why" || command == "ask" else {
             return invalid()
@@ -70,20 +72,40 @@ public enum AskWhyCommand {
                 stderr: "Set --person or JE_PERSON_ID so je can show whose route this is.\n"
             )
         }
-        guard let role = parsed.role else {
-            return CLIResult(
-                code: 2,
-                stderr: "Set --role fast or --role strong for this route.\n"
-            )
-        }
 
         let loadedCandidates: [RouteCandidate]
+        let policyLoad: PolicyLoadResult
         do {
             loadedCandidates = try AssignmentRegistry(directory: stateDirectory).loadCandidates()
+            policyLoad = try PolicyLoader.load(
+                stateDirectory: stateDirectory,
+                currentDirectory: currentDirectoryURL
+                    ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
+                personID: personID,
+                explicitNeverCloud: parsed.neverCloud,
+                explicitCloudProfile: parsed.cloudProfileReference
+            )
         } catch let error as StateStoreError {
             return CLIResult(code: 2, stderr: error.message + "\n")
         } catch {
             return CLIResult(code: 2, stderr: "The assignment registry could not be read.\n")
+        }
+        let effective = policyLoad.effective
+
+        var explicitApplied: [String] = []
+        if parsed.role != nil { explicitApplied.append("role") }
+        if parsed.candidateID != nil { explicitApplied.append("candidate_id") }
+        if parsed.harness != nil { explicitApplied.append("harness") }
+        if parsed.engine != nil { explicitApplied.append("engine") }
+        if parsed.executionPlace != nil { explicitApplied.append("execution_place") }
+        if parsed.neverCloud { explicitApplied.append("never_cloud") }
+        if parsed.cloudProfileReference != nil { explicitApplied.append("cloud_profile") }
+        var policySources = effective.sources
+        if !explicitApplied.isEmpty {
+            policySources.insert(
+                PolicySourceRecord(layer: "explicit", source: "flags", applied: explicitApplied, ignored: []),
+                at: 0
+            )
         }
 
         let candidates = parsed.singleStep
@@ -91,19 +113,30 @@ public enum AskWhyCommand {
             : loadedCandidates.filter { $0.harness != .builtIn }
         let request = RouteRequest(
             personID: personID,
-            explicitRole: role,
-            neverCloud: parsed.neverCloud,
-            cloudAuthorization: parsed.cloudProfileReference.map {
-                CloudAuthorization.explicit(profileReference: $0)
-            } ?? .none,
+            explicitRole: parsed.role,
+            projectRole: effective.projectRole,
+            personDefaultRole: effective.personRole,
+            operatorDefaultRole: effective.operatorRole,
+            allowedExecutionPlaces: effective.allowedExecutionPlaces,
+            neverCloud: effective.neverCloud,
+            cloudAuthorization: effective.cloudAuthorization,
             explicitPreferences: RoutePreferences(
                 candidateID: parsed.candidateID,
                 harness: parsed.harness,
                 engine: parsed.engine,
                 executionPlace: parsed.executionPlace
             ),
+            projectPreferences: effective.projectPreferences,
+            personPreferences: effective.personPreferences,
+            operatorPreferences: effective.operatorPreferences,
             promptSizeBucket: bucket(for: parsed.prompt)
         )
+        guard request.resolvedRole != nil else {
+            return CLIResult(
+                code: 2,
+                stderr: "Set --role fast or --role strong, or a default role in policy.\n"
+            )
+        }
         let decision = RoutingPolicy().evaluate(request: request, candidates: candidates)
         let selected = candidates.first { $0.id == decision.selectedCandidateID }
         let explanation = RouteExplanation(
@@ -111,7 +144,8 @@ public enum AskWhyCommand {
             candidateCount: candidates.count,
             selectedCandidate: selected,
             decision: decision,
-            memoryProfileName: parsed.memoryProfileName
+            memoryProfileName: parsed.memoryProfileName,
+            policySources: policySources
         )
 
         if command == "why" {
@@ -384,6 +418,19 @@ public enum AskWhyCommand {
             "Policy: \(explanation.decision.policyVersion)",
             "Winning layer: \(explanation.decision.winningLayer)"
         ]
+        if explanation.policySources.isEmpty {
+            lines.append("Policy sources: none loaded")
+        } else {
+            lines.append("Policy sources:")
+            for source in explanation.policySources {
+                var line = "  \(source.layer) (\(source.source)): applied "
+                    + (source.applied.isEmpty ? "none" : source.applied.joined(separator: ", "))
+                if !source.ignored.isEmpty {
+                    line += "; ignored " + source.ignored.joined(separator: ", ")
+                }
+                lines.append(line)
+            }
+        }
         if let candidate = explanation.selectedCandidate {
             lines.append("Route: \(candidate.id)")
             lines.append("Harness: \(candidate.harness.rawValue) (\(candidate.launchMode.rawValue))")

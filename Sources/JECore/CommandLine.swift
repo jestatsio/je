@@ -36,7 +36,8 @@ public enum JECommandLine {
         currentExecutablePath: String? = nil,
         setupRunner: SetupCommandRunning? = nil,
         setupConfirmer: SetupConfirming? = nil,
-        foundationHelper: FoundationHelping? = nil
+        foundationHelper: FoundationHelping? = nil,
+        currentDirectoryURL: URL? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -136,7 +137,17 @@ public enum JECommandLine {
                 stdoutSink: stdoutSink,
                 musePhysicalMemoryBytes: musePhysicalMemoryBytes,
                 builtInTransport: builtInTransport,
-                memoryTransport: memoryTransport
+                memoryTransport: memoryTransport,
+                currentDirectoryURL: currentDirectoryURL
+            )
+        case "policy":
+            return policyShow(
+                arguments: remaining,
+                stateDirectory: stateDirectory(
+                    explicit: explicitStateDirectory,
+                    environment: environment
+                ),
+                currentDirectoryURL: currentDirectoryURL
             )
         case "profile":
             return ProfileCommands.run(
@@ -341,6 +352,79 @@ public enum JECommandLine {
             )
         }
         return invalid()
+    }
+
+    private struct PolicyShowReport: Codable, Equatable, Sendable {
+        let schemaVersion: Int
+        let statePolicyPresent: Bool
+        let operatorFields: [String]
+        let personalPeople: [String]
+        let trustedProjects: [String]
+        let projectFilePresent: Bool
+        let projectRoot: String?
+
+        enum CodingKeys: String, CodingKey {
+            case schemaVersion = "schema_version"
+            case statePolicyPresent = "state_policy_present"
+            case operatorFields = "operator_fields"
+            case personalPeople = "personal_people"
+            case trustedProjects = "trusted_projects"
+            case projectFilePresent = "project_file_present"
+            case projectRoot = "project_root"
+        }
+    }
+
+    private static func policyShow(
+        arguments: [String],
+        stateDirectory: URL,
+        currentDirectoryURL: URL?
+    ) -> CLIResult {
+        let asJSON: Bool
+        if arguments == ["policy", "show", "--json"] {
+            asJSON = true
+        } else if arguments == ["policy", "show"] {
+            asJSON = false
+        } else {
+            return invalid()
+        }
+        do {
+            let store = ProfileStore(directory: stateDirectory)
+            let statePolicy = try PolicyLoader.loadStatePolicy(
+                store: store, stateDirectory: stateDirectory
+            )
+            let cwd = (currentDirectoryURL
+                ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true))
+                .standardizedFileURL.resolvingSymlinksInPath()
+            let discovered = PolicyLoader.discoverProjectFile(from: cwd)
+            if let discovered {
+                _ = try PolicyLoader.loadProjectFile(at: discovered.file)
+            }
+            let report = PolicyShowReport(
+                schemaVersion: 1,
+                statePolicyPresent: statePolicy != nil,
+                operatorFields: statePolicy?.operatorDefaults.presentFields ?? [],
+                personalPeople: (statePolicy?.personalDefaults.keys.sorted()) ?? [],
+                trustedProjects: (statePolicy?.trustedProjects.map(\.identity).sorted()) ?? [],
+                projectFilePresent: discovered != nil,
+                projectRoot: discovered?.root.path
+            )
+            if asJSON {
+                return json(report)
+            }
+            var lines = [
+                "State policy: \(report.statePolicyPresent ? "present" : "absent")",
+                "Operator fields: \(report.operatorFields.isEmpty ? "none" : report.operatorFields.joined(separator: ", "))",
+                "Personal defaults: \(report.personalPeople.isEmpty ? "none" : report.personalPeople.joined(separator: ", "))",
+                "Trusted projects: \(report.trustedProjects.isEmpty ? "none" : report.trustedProjects.joined(separator: ", "))",
+                "Project file: \(report.projectRoot.map { "present at \($0)" } ?? "absent")"
+            ]
+            lines.append("Untrusted project files narrow only. Widening lives in state policy.")
+            return CLIResult(code: 0, stdout: lines.joined(separator: "\n") + "\n")
+        } catch let error as StateStoreError {
+            return CLIResult(code: 2, stderr: error.message + "\n")
+        } catch {
+            return CLIResult(code: 2, stderr: "The routing policy could not be read.\n")
+        }
     }
 
     private static func supportMatrix(arguments: [String]) -> CLIResult {
@@ -1465,6 +1549,7 @@ public enum JECommandLine {
       models [--json]          Inspect engines, artifacts, assignments, and storage
       triage availability [--json] Show foundation-model triage availability (evaluation only)
       triage evaluate-titling [--json] Run the synthetic titling evaluation (evaluation only)
+      policy show [--json]     Show loaded routing policy sources without secrets
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
       doctor [--json]          Show a local health overview without contacting a service
