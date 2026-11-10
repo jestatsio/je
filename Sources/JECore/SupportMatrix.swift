@@ -118,12 +118,16 @@ public enum SupportMatrix {
                 for place in ExecutionPlace.allCases {
                     for harness in codingHarnesses {
                         for mode in codingModes {
-                            let status: QualificationStatus
-                            if harness == .muse && mode == .headless {
-                                status = .blockedOnContractDiscovery
-                            } else {
-                                status = .planned
-                            }
+                            // Muse 1.4.14 has no arbitrary local endpoint
+                            // contract. Its only local route is the gated
+                            // built-in Glimmer experiment (MLX family).
+                            // Non-MLX Muse cells were declared unsupported
+                            // ahead of qualification on 2026-11-09 trial
+                            // evidence. See MUSE_CONTRACT_TRIALS.md.
+                            let status: QualificationStatus =
+                                (harness == .muse && engine != .mlxNative)
+                                ? .unsupported
+                                : .planned
                             entries.append(SupportMatrixEntry(
                                 role: role,
                                 engine: engine,

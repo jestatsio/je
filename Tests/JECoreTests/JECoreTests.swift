@@ -57,16 +57,20 @@ final class JECoreTests: XCTestCase {
         let qualified = SupportMatrix.launchEntries.filter { $0.status == .qualified }
         XCTAssertEqual(qualified.map(\.id), ["fast/ollama/built_in/single_step/personal_machine"])
         XCTAssertEqual(SupportMatrix.summary.countsByStatus["qualified"], 1)
-        XCTAssertEqual(SupportMatrix.summary.countsByStatus["planned"], 95)
-        XCTAssertEqual(SupportMatrix.summary.countsByStatus["blocked_on_contract_discovery"], 16)
+        XCTAssertEqual(SupportMatrix.summary.countsByStatus["planned"], 87)
+        XCTAssertEqual(SupportMatrix.summary.countsByStatus["unsupported"], 24)
+        XCTAssertNil(SupportMatrix.summary.countsByStatus["blocked_on_contract_discovery"])
     }
 
-    func testMuseHeadlessCellsNameTheContractGap() {
-        let gaps = SupportMatrix.launchEntries.filter {
-            $0.harness == .muse && $0.launchMode == .headless
-        }
-        XCTAssertEqual(gaps.count, 16)
-        XCTAssertTrue(gaps.allSatisfy { $0.status == .blockedOnContractDiscovery })
+    func testMuseCellsFollowTrialDeclaration() {
+        let muse = SupportMatrix.launchEntries.filter { $0.harness == .muse }
+        XCTAssertEqual(muse.count, 32)
+        let unsupported = muse.filter { $0.status == .unsupported }
+        XCTAssertEqual(unsupported.count, 24)
+        XCTAssertTrue(unsupported.allSatisfy { $0.engine != .mlxNative })
+        let glimmer = muse.filter { $0.engine == .mlxNative }
+        XCTAssertEqual(glimmer.count, 8)
+        XCTAssertTrue(glimmer.allSatisfy { $0.status == .planned })
     }
 
     func testProfileNameValidatorMatchesFrozenOracleShape() {

@@ -28,8 +28,8 @@ qualification, the narrow built-in path, content-free usage traces, and a
 signed and notarized Homebrew release.
 
 The December risk comes from breadth and evidence rather than the basic
-launch plumbing. The launch matrix has 1 qualified cell, 95 planned cells,
-and 16 cells blocked on Muse contract discovery. Several settled platform
+launch plumbing. The launch matrix has 1 qualified cell, 87 planned cells,
+and 24 cells declared unsupported on Muse trial evidence. Several settled platform
 systems have no implementation in this public tree. Other required systems
 belong to a private host build or private Studio services, and this audit
 cannot verify their state from this repository.
@@ -43,7 +43,7 @@ recorded qualification evidence support a different status.
 The audit compares the settled answers in [ROADMAP.md](ROADMAP.md) with
 [IMPLEMENTATION.md](IMPLEMENTATION.md), [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md),
 the Swift sources under [Sources/](Sources/), the tests under
-[Tests/](Tests/), the public release state, and the installed 0.3.0 client.
+[Tests/](Tests/), the public release state, and the installed 0.3.1 client.
 
 Public-tree evidence can prove the user artifact. It cannot prove the
 private operator host build, hosted memory or history services, Google and
@@ -69,13 +69,13 @@ remain outside its evidence.
 | Measure | Current state |
 | --- | --- |
 | Q1 through Q25 | 1 Done, 16 Partial, 7 Missing, 1 Private or unverified |
-| Launch matrix | 1 qualified, 95 planned, 16 blocked, 112 total |
+| Launch matrix | 1 qualified, 87 planned, 24 unsupported, 112 total |
 | Qualified roles | `fast` only |
 | Qualified engines | Ollama only |
 | Qualified harnesses or paths | Built-in only |
 | Qualified launch modes | Single-step only |
 | Qualified execution places | Personal machine only |
-| Named December workflows | Not yet settled in a qualification plan |
+| Named December workflows | W1 to W6 adopted in Gate A. Fixtures and W3/W4 participants still open |
 | Two-person workflow evidence | None recorded in this repository |
 | Studio hardware | Due 2026-12-10 to 2026-12-17 under the roadmap |
 | December judgment date | 2026-12-31 |
@@ -112,26 +112,20 @@ is `evidence:qualification:c7f949ad37209589a3fa353f88c8a026810281cb4a0abcc8fecdf
 for `studio-harness-qwen35:4b` on Ollama 0.40.15. The bounded built-in suite
 passed its three exact-answer tasks on 2026-11-09.
 
-Three matrix semantics need a decision before Studio qualification begins:
+Matrix semantics were settled in [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md)
+on 2026-11-09. D1: one current exact pass completes a broad cell. D2:
+protocol stays in exact assignment evidence. D3: a private committed
+copy is the December evidence record. The export step that fills that
+record is still to build. Local laptop state alone still does not
+count as retained evidence.
 
-1. A cell has no person, model artifact, engine version, harness version,
-   protocol version, or configuration digest fields. Exact identities live
-   in assignment and qualification records. December audit rules must say
-   how many exact qualified assignments make one broad cell complete.
-2. Q26 names protocol as a cell dimension. The shipped matrix carries
-   protocol only indirectly through assignment evidence. The audit must
-   either accept that mapping in writing or expand the matrix before new
-   qualification results are read.
-3. The current qualification evidence file lives in local state on Eric's
-   laptop. December evidence needs an owner, a retention location, and a
-   review path that survives one machine. A content address alone does not
-   give another reviewer the underlying record.
-
-Muse headless accounts for all 16 blocked cells. Current discovery found a
-gated built-in Glimmer path and no arbitrary local endpoint contract. If a
-bounded contract trial proves that no native route exists for a mode, that
-mode needs a timely unsupported declaration under the settled rules. It
-cannot be quietly removed after December results are known.
+Bounded Muse trials on 2026-11-09 proved no arbitrary local endpoint
+contract in 1.4.14. The only local route is the gated Glimmer
+experiment. Under Gate A D5, the 24 Muse cells on non-MLX engines are
+now declared `unsupported` ahead of qualification, and the 4 MLX
+headless cells moved from blocked to `planned` because their contract
+is discovered. No Muse cell is qualified. See
+[MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md).
 
 ## Checklist by platform area
 
@@ -251,9 +245,12 @@ Status: **Partial**.
 - [ ] Pass a recorded qualification for any Codex cell.
 - [ ] Pass a recorded qualification for any Claude Code cell.
 - [ ] Complete Muse adapter contract version 1 as an explicit reviewed
-  contract. Discovery and one gated built-in route exist. Arbitrary local
-  endpoints, plugin trust, MCP attachment, resume, events, cancellation,
-  setup, and removal are not yet qualified as one adapter surface.
+  contract. Laptop trials on 2026-11-09 proved discovery, headless
+  events, both local gates, plugin lifecycle, and offline export, and
+  disproved arbitrary local endpoints. Glimmer execution, plugin
+  capability approval, MCP attachment, resume, and cancellation stay
+  unproven until Studio trials. See
+  [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md).
 - [ ] Add Muse to `je setup` only after its plugin and trust flow is
   proven. Setup currently manages Codex and Claude Code.
 - [ ] Qualify interactive and headless modes separately for each harness,
@@ -522,7 +519,7 @@ foundations in place.
 | Q10 | Model and engine lifecycle | Missing | No `je models` surface or previewed lifecycle flow exists in the user core. |
 | Q11 | Small on-device model | Missing | No Apple Foundation Models helper or task evaluation exists. |
 | Q12 | Scheduling and background work | Missing | No jobs client, warm-set manager, or warm-state reporting exists. |
-| Q13 | Harness set | Partial | Codex and Claude Code launch well, while Muse remains discovery plus a gated special route. |
+| Q13 | Harness set | Partial | Codex and Claude Code launch well. Muse trials prove the gated Glimmer route only. 24 non-MLX Muse cells are unsupported. |
 | Q14 | Protocol translation | Partial | Native checks are strong on shipped routes, while no harness cell has passed qualification. |
 | Q15 | Built-in agent loop | Partial | The narrow single-step path ships, while 15 built-in cells and non-Ollama protocols remain unqualified. |
 | Q16 | MCP and skills | Missing | Direct plugin and MCP attachment ship, while the registry and live broker do not. |
@@ -605,9 +602,11 @@ Target: before 2026-12-10.
 - [ ] Add versioned loading for trusted project policy, personal defaults,
   operator defaults, never-cloud state, and cloud intent. Route traces
   need to name each loaded source without copying secrets.
-- [ ] Run Muse local-contract trials separately for interactive and
-  headless modes. Record protocol, tool behavior, approvals, MCP, resume,
-  cancellation, setup, and removal claims only at the level proven.
+- [x] Run Muse local-contract trials separately for interactive and
+  headless modes. Done on the laptop on 2026-11-09. Claims are recorded
+  only at the level proven in
+  [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md). Glimmer tool
+  behavior, MCP, resume, and cancellation need Studio trials.
 - [ ] Attempt harness qualification on routes honestly available from the
   laptop. A failed local-model result stays failed or planned. The point
   is early blocker discovery, not a forced pass.

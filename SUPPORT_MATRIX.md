@@ -21,9 +21,12 @@ path, one launch mode, and one execution place.
 | Launch modes | `interactive`, `headless`, `single_step` for the built-in path |
 | Places | `personal_machine`, `studio_workspace` |
 
-The first published matrix has 112 cells. Muse headless cells are marked
-`blocked_on_contract_discovery`. Other unqualified cells are marked `planned`.
-As of 0.3.0 one cell is `qualified`:
+The first published matrix has 112 cells: 1 `qualified`, 87 `planned`,
+and 24 `unsupported`. The unsupported cells are Muse on non-MLX engines,
+declared ahead of qualification on 2026-11-09 trial evidence in
+[MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md). Muse on MLX native
+(the gated Glimmer route) stays `planned` in both modes. As of 0.3.1 one
+cell is `qualified`:
 `fast/ollama/built_in/single_step/personal_machine`, on qualification
 evidence recorded 2026-11-09. See [IMPLEMENTATION.md](IMPLEMENTATION.md).
 

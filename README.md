@@ -117,6 +117,7 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) | The launch qualification matrix and its rules. |
 | [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md) | The December launch completeness audit, gaps, and critical path. |
 | [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md) | Settled measurement rules for December qualification. |
+| [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md) | Bounded Muse contract trials and the unsupported declaration they support. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with SHA-256 checksums and build manifests. |
 

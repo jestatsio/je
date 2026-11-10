@@ -162,7 +162,9 @@ that the launch platform is complete.
 
 ## What it does not contain
 
-- Muse arbitrary local endpoints, harness-attached memory context, and non-Ollama
+- Muse arbitrary local endpoints (trial-proven absent in 1.4.14; see
+  [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md)), harness-attached
+  memory context, and non-Ollama
   built-in protocol routes, engine lifecycle,
   broker traffic, memory sync, history storage, credential rotation with a
   pre-switch check, or remote access. Unsupported launch cells fail closed
@@ -172,9 +174,10 @@ that the launch platform is complete.
   `evidence:qualification:c7f949ad37209589a3fa353f88c8a026810281cb4a0abcc8fecdf6e69fb0156e`,
   recorded 2026-11-09 for `studio-harness-qwen35:4b` on Ollama 0.40.15. The
   bounded suite `bounded-builtin-tasks-v1` passed all three exact-answer
-  tasks, and `je ask --single-step` served a prompt through the route. The
-  other 111 cells remain planned or blocked until their own recorded
-  evidence exists.
+  tasks, and `je ask --single-step` served a prompt through the route. Of
+  the other 111 cells, 87 remain planned until their own recorded
+  evidence exists and 24 Muse cells on non-MLX engines are declared
+  unsupported on 2026-11-09 trial evidence.
 
 ## Local checks
 

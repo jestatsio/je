@@ -376,7 +376,7 @@ public enum DoctorOverviewRenderer {
 
         lines.append("Support matrix")
         var matrix = "  \(report.supportMatrix.totalCells) launch cells"
-        let knownOrder = ["planned", "blocked_on_contract_discovery", "qualified"]
+        let knownOrder = ["qualified", "planned", "unsupported", "blocked_on_contract_discovery"]
         let extras = report.supportMatrix.countsByStatus.keys
             .filter { !knownOrder.contains($0) }.sorted()
         for key in knownOrder + extras {
