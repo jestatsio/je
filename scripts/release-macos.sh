@@ -33,15 +33,16 @@ fi
 
 swift build -c release --product je
 swift build -c release --product je-secret-helper
+swift build -c release --product je-foundation-helper
 BIN_DIR=$(swift build -c release --show-bin-path)
 
 STAGE="dist/stage-$VERSION"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-cp "$BIN_DIR/je" "$BIN_DIR/je-secret-helper" LICENSE "$STAGE/"
-strip -x "$STAGE/je" "$STAGE/je-secret-helper"
+cp "$BIN_DIR/je" "$BIN_DIR/je-secret-helper" "$BIN_DIR/je-foundation-helper" LICENSE "$STAGE/"
+strip -x "$STAGE/je" "$STAGE/je-secret-helper" "$STAGE/je-foundation-helper"
 
-for bin in je je-secret-helper; do
+for bin in je je-secret-helper je-foundation-helper; do
     archs=$(lipo -archs "$STAGE/$bin")
     [ "$archs" = "arm64" ] || { echo "$bin has unexpected architectures: $archs" >&2; exit 1; }
     if [ "$SIGN_IDENTITY" = "-" ]; then
@@ -65,7 +66,7 @@ elif [ "$SIGN_IDENTITY" != "-" ]; then
 fi
 
 ARTIFACT="je-$VERSION-macos-arm64.tar.gz"
-(cd "$STAGE" && COPYFILE_DISABLE=1 tar -czf "../$ARTIFACT" je je-secret-helper LICENSE)
+(cd "$STAGE" && COPYFILE_DISABLE=1 tar -czf "../$ARTIFACT" je je-secret-helper je-foundation-helper LICENSE)
 SHA256=$(shasum -a 256 "dist/$ARTIFACT" | cut -d' ' -f1)
 BYTES=$(stat -f%z "dist/$ARTIFACT")
 printf '%s  %s\n' "$SHA256" "$ARTIFACT" > dist/SHA256SUMS

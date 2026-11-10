@@ -35,7 +35,8 @@ public enum JECommandLine {
         memoryTransport: MemoryHTTPTransport? = nil,
         currentExecutablePath: String? = nil,
         setupRunner: SetupCommandRunning? = nil,
-        setupConfirmer: SetupConfirming? = nil
+        setupConfirmer: SetupConfirming? = nil,
+        foundationHelper: FoundationHelping? = nil
     ) -> CLIResult {
         var remaining = arguments
         var explicitStateDirectory: String?
@@ -85,6 +86,12 @@ public enum JECommandLine {
                     environment: environment
                 ),
                 environment: environment
+            )
+        case "triage":
+            return triage(
+                arguments: remaining,
+                environment: environment,
+                foundationHelper: foundationHelper
             )
         case "support-matrix":
             return supportMatrix(arguments: remaining)
@@ -272,6 +279,68 @@ public enum JECommandLine {
         } catch {
             return CLIResult(code: 2, stderr: "The models inventory could not be built.\n")
         }
+    }
+
+    private static func triage(
+        arguments: [String],
+        environment: [String: String],
+        foundationHelper: FoundationHelping?
+    ) -> CLIResult {
+        let helper = foundationHelper ?? ProcessFoundationHelper.default(environment: environment)
+        if arguments == ["triage", "availability"]
+            || arguments == ["triage", "availability", "--json"] {
+            let availability: FoundationAvailability
+            do {
+                availability = try helper.availability()
+            } catch {
+                availability = FoundationAvailability(available: false, reason: "helper-error")
+            }
+            let identity = TriageProviderIdentity(availability: availability)
+            if arguments.count == 3 {
+                return json(identity)
+            }
+            return CLIResult(
+                code: availability.available ? 0 : 1,
+                stdout: "Foundation triage: \(identity.availability) "
+                    + "(\(identity.provider), helper \(identity.helperVersion), "
+                    + "\(identity.operatingSystem)). Evaluation only.\n"
+            )
+        }
+        if arguments == ["triage", "evaluate-titling"]
+            || arguments == ["triage", "evaluate-titling", "--json"] {
+            let report = TitlingEvaluationRunner.run(helper: helper)
+            if arguments.count == 3 {
+                let encoded = json(report)
+                return CLIResult(
+                    code: report.passed ? 0 : 1,
+                    stdout: encoded.stdout,
+                    stderr: encoded.stderr
+                )
+            }
+            guard report.available else {
+                return CLIResult(
+                    code: 1,
+                    stdout: "Titling evaluation unavailable: \(report.identity.availability). "
+                        + "Template titling is the fallback.\n"
+                )
+            }
+            var lines = report.cases.map { result in
+                "  \(result.id): \(result.passed ? "passed" : "failed") "
+                    + "(\(result.detail))\(result.title.map { " — \($0)" } ?? "")"
+            }
+            lines.insert(
+                "Titling evaluation: \(report.passedCount)/\(report.cases.count) passed "
+                    + "(\(report.identity.provider), helper \(report.identity.helperVersion), "
+                    + "\(report.identity.operatingSystem)).",
+                at: 0
+            )
+            lines.append("Titling only. Routing scores and memory remain unevaluated and inert.")
+            return CLIResult(
+                code: report.passed ? 0 : 1,
+                stdout: lines.joined(separator: "\n") + "\n"
+            )
+        }
+        return invalid()
     }
 
     private static func supportMatrix(arguments: [String]) -> CLIResult {
@@ -1394,6 +1463,8 @@ public enum JECommandLine {
     Commands:
       status [--json]          Show native core and support status
       models [--json]          Inspect engines, artifacts, assignments, and storage
+      triage availability [--json] Show foundation-model triage availability (evaluation only)
+      triage evaluate-titling [--json] Run the synthetic titling evaluation (evaluation only)
       support-matrix [--json]  Show the published launch qualification matrix
       contracts [--json]       Show the frozen Python oracle contract
       doctor [--json]          Show a local health overview without contacting a service

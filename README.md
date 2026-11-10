@@ -69,6 +69,7 @@ Codex uses the same shape with its own tested route and reviewed model catalog. 
 | `je why` | Explains the selected qualified route without running anything. |
 | `je assignments` | Authors personal-machine assignments and records qualification evidence. |
 | `je models` | Inspects engines, published artifacts, assignments, storage, and qualification. Read-only. |
+| `je triage` | Evaluation-only foundation-model titling checks. No routing authority. |
 | `je memory` | Manages a separate personal memory connection, attached only on request. |
 | `je ollama` | Runs the native Ollama CLI through its own connection and a temporary local relay. |
 | `je run` | Hands a saved connection to any other OpenAI-compatible client. |

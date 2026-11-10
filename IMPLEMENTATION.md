@@ -15,9 +15,10 @@ that the launch platform is complete.
   service-control modules.
 - Apple-only credential work lives in `je-secret-helper`. It uses macOS
   Keychain generic passwords through a narrow JSON stdin and stdout protocol.
-  Secrets never travel in process arguments. Release builds sign both
-  binaries with a Developer ID identity (`io.jestats.je` and
-  `io.jestats.je-secret-helper`), hardened runtime, and a secure timestamp,
+  Secrets never travel in process arguments. Release builds sign all
+  bundled binaries with a Developer ID identity (`io.jestats.je`,
+  `io.jestats.je-secret-helper`, and `io.jestats.je-foundation-helper`),
+  hardened runtime, and a secure timestamp,
   then notarize them through `scripts/release-macos.sh`, so the helper keeps
   a stable Keychain identity across upgrades.
 
@@ -148,6 +149,15 @@ that the launch platform is complete.
   tool list inside bounded request, page, tool, and byte limits. It never
   calls a memory tool and reports only protocol, count, and read or write
   availability.
+- `je triage availability` and `je triage evaluate-titling` (also
+  `--json`) run the evaluation-only Q11 surface over the bundled
+  `je-foundation-helper`. The helper speaks one bounded JSON request per
+  run, reports Apple Foundation Models availability, and generates
+  titles on request. Titling uses a predeclared three-case synthetic set
+  with provider, helper version, OS build, and availability recorded.
+  Template titling is the deterministic fallback. Nothing here has
+  routing authority, saves memory, or changes a route. Advisory routing
+  scores and memory extraction proposals remain unevaluated and inert.
 - `je doctor muse` performs bounded, non-inference contract discovery from
   public version and help surfaces. For Muse 1.4.14 it distinguishes the
   gated built-in Glimmer route from an arbitrary local endpoint contract and

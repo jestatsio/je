@@ -68,7 +68,7 @@ remain outside its evidence.
 
 | Measure | Current state |
 | --- | --- |
-| Q1 through Q25 | 1 Done, 16 Partial, 7 Missing, 1 Private or unverified |
+| Q1 through Q25 | 1 Done, 18 Partial, 5 Missing, 1 Private or unverified |
 | Launch matrix | 1 qualified, 87 planned, 24 unsupported, 112 total |
 | Qualified roles | `fast` only |
 | Qualified engines | Ollama only |
@@ -287,24 +287,29 @@ Status: **Partial**, with the launch slice itself in good shape.
 
 ### Apple Foundation Models and advisory triage
 
-Status: **Missing**.
+Status: **Partial**. Evaluation-only helper and titling evaluation
+exist. Advisory routing scores and memory proposals do not.
 
-- [ ] Build the small signed native helper for Apple Foundation Models on
-  the macOS side of a personal machine and the Studio.
-- [ ] Qualify titling as its own task with provider, helper version,
-  operating system build, and availability recorded.
+- [x] Build the small signed native helper for Apple Foundation Models on
+  the macOS side of a personal machine and the Studio. The
+  `je-foundation-helper` target is built on `main` and joins the signed
+  release set in [`release-macos.sh`](scripts/release-macos.sh). A
+  release carrying it is still pending. Studio proof follows the laptop.
+- [x] Qualify titling as its own task with provider, helper version,
+  operating system build, and availability recorded. The predeclared
+  three-case synthetic set in
+  [`Triage.swift`](Sources/JECore/Triage.swift) passed 3/3 live on
+  2026-11-09 (macOS 27.2.1, build 26B131) via
+  `je triage evaluate-titling`. An OS update invalidates it until rerun.
 - [ ] Evaluate advisory routing scores without granting routing authority.
   Routing suggestions stay inert until a task-specific evaluation passes
   and Eric makes an explicit policy change.
 - [ ] Evaluate memory extraction proposals as a separate task. No proposal
   may save memory by itself.
-- [ ] Prove clean fallback when the system model is unavailable. The
-  fallback is deterministic routing, template titling, and absent memory
-  proposals rather than a silent model switch.
-
-No `FoundationModels` reference exists in the shipped Swift sources. The
-routing core can carry supplied advisory scores for trace purposes, but no
-producer creates them.
+- [ ] Prove clean fallback when the system model is unavailable. Template
+  titling fallback is implemented and tested. The full claim also needs
+  deterministic-routing and absent-proposal evidence in a wired surface,
+  which does not exist yet because triage is evaluation-only.
 
 ### MCP, skills, and the live broker
 
@@ -516,8 +521,8 @@ foundations in place.
 | Q7 | Routing signals | Partial | The closed policy types ship, while trusted config sources for most soft layers do not. |
 | Q8 | Model roles | Partial | Fast and strong are modeled, while strong has no qualified assignment and role cloud targets are not configured as policy. |
 | Q9 | Inference engines | Partial | Four families are named, while only Ollama has a shipped general route and qualification. |
-| Q10 | Model and engine lifecycle | Missing | No `je models` surface or previewed lifecycle flow exists in the user core. |
-| Q11 | Small on-device model | Missing | No Apple Foundation Models helper or task evaluation exists. |
+| Q10 | Model and engine lifecycle | Partial | Read-only `je models` inspection exists. Previewed lifecycle actions do not. |
+| Q11 | Small on-device model | Partial | Evaluation-only helper exists. Titling passed 3/3 live. Routing scores and memory proposals are unevaluated and inert. |
 | Q12 | Scheduling and background work | Missing | No jobs client, warm-set manager, or warm-state reporting exists. |
 | Q13 | Harness set | Partial | Codex and Claude Code launch well. Muse trials prove the gated Glimmer route only. 24 non-MLX Muse cells are unsupported. |
 | Q14 | Protocol translation | Partial | Native checks are strong on shipped routes, while no harness cell has passed qualification. |
@@ -613,8 +618,9 @@ Target: before 2026-12-10.
 - [x] Add read-only `je models` inspection as the stable user surface for
   engines, artifacts, assignments, storage, and qualification status.
   Done on `main`. Release pending.
-- [ ] Prototype the Apple Foundation Models helper in evaluation-only mode,
-  or record an explicit decision that changes its December status.
+- [x] Prototype the Apple Foundation Models helper in evaluation-only mode,
+  or record an explicit decision that changes its December status. Done
+  on `main`. Titling passed live. Advisory and memory tasks remain.
 - [ ] Design the broker registry, memory sync contract, history redaction
   and erasure proof, and companion status interfaces before host work
   hardens around ad hoc shapes.
