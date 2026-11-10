@@ -68,6 +68,16 @@ that the launch platform is complete.
 - A deterministic routing policy core with hard filters, settled preference
   layers, explicit cloud authorization, replayable filter results, and traced
   advisory scores that do not change the starter route.
+- Versioned routing policy loading: `policy.json` (schema 1) in the state
+  directory carries operator defaults, per-person defaults, and trusted
+  project policy. A repository `.je/policy.json` is discovered by walking
+  up from the working directory. Untrusted project files may only narrow
+  (never-cloud, allowed places). Widening fields apply only from the state
+  store. Cloud targets resolve explicit, then trusted project, then
+  personal. Operator cloud profiles are ignored. Role may now come from
+  flags or any policy layer. `je why` names every loaded source and the
+  fields it applied or ignored. `je policy show` inspects loaded sources.
+  Malformed policy fails closed without echoing contents.
 - A content-free usage ledger core with duplicate-safe run identities and
   daily aggregates that keep actual cost, estimated cost, and unknown
   measurements distinct.

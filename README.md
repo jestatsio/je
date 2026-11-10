@@ -70,6 +70,7 @@ Codex uses the same shape with its own tested route and reviewed model catalog. 
 | `je assignments` | Authors personal-machine assignments and records qualification evidence. |
 | `je models` | Inspects engines, published artifacts, assignments, storage, and qualification. Read-only. |
 | `je triage` | Evaluation-only foundation-model titling checks. No routing authority. |
+| `je policy` | Shows loaded routing policy sources. State `policy.json` plus narrowing-only project files. |
 | `je memory` | Manages a separate personal memory connection, attached only on request. |
 | `je ollama` | Runs the native Ollama CLI through its own connection and a temporary local relay. |
 | `je run` | Hands a saved connection to any other OpenAI-compatible client. |
@@ -119,6 +120,7 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md) | The December launch completeness audit, gaps, and critical path. |
 | [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md) | Settled measurement rules for December qualification. |
 | [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md) | Bounded Muse contract trials and the unsupported declaration they support. |
+| [GATE_B_DESIGNS.md](GATE_B_DESIGNS.md) | Draft designs for the broker, memory sync, history erasure, companion, and remote access. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with SHA-256 checksums and build manifests. |
 

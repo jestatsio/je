@@ -169,15 +169,18 @@ Status: **Partial**.
   supplied scores with `advisoryApplied` set to false.
 - [x] Compute a prompt-size bucket without storing prompt text in the
   usage trace.
-- [ ] Load trusted project policy for route roles and preferences. The
-  policy type accepts project values, but [`AskWhy`](Sources/JECore/AskWhy.swift)
-  does not load them from a project source.
+- [x] Load trusted project policy for route roles and preferences.
+  [`PolicyLoader`](Sources/JECore/PolicyStore.swift) loads trusted
+  project entries from state `policy.json` and applies untrusted
+  `.je/policy.json` files as narrowing only.
 - [ ] Load personal defaults for roles, preferences, cloud intent, and
-  built-in eligibility. The command line currently supplies explicit values
-  and otherwise requires a role.
-- [ ] Load operator defaults through a versioned and inspectable config
-  surface. The policy type accepts operator values, but no operator config
-  loader ships in the user core.
+  built-in eligibility. Roles, preferences, never-cloud, and cloud
+  intent now load from `policy.json`, and role no longer requires a
+  flag. Built-in eligibility as a personal default still does not load.
+  `--single-step` stays explicit.
+- [x] Load operator defaults through a versioned and inspectable config
+  surface. State `policy.json` is schema-versioned and `je policy show`
+  inspects it. Operator cloud profiles are ignored by design.
 - [ ] Record live candidate availability from engine or service health.
   Routing currently consumes assignment availability as saved metadata.
 - [ ] Give profile ownership a stronger operator and person model than a
@@ -242,8 +245,22 @@ Status: **Partial**.
   identity, task results, exit codes, durations, and output digests.
 - [x] Ship a bounded four-task file suite for harness candidates and a
   bounded three-task exact-answer suite for built-in candidates.
-- [ ] Pass a recorded qualification for any Codex cell.
-- [ ] Pass a recorded qualification for any Claude Code cell.
+- [ ] Pass a recorded qualification for any Codex cell. Attempted
+  2026-11-09 on the laptop (Codex 0.167.0, Ollama 0.40.16,
+  `studio-harness-qwen35:4b`, headless): failed at harness startup.
+  Codex refuses non-trusted directories and qualification task
+  directories are not git repositories. Evidence
+  `evidence:qualification:6f7840945d414d9a7eb742b820a2438861540ed9c529f797e9d16c6bf221c29f`
+  (staging copy only). A trust decision is needed before a rerun: git
+  fixture directories or an explicit harness flag. Je does not widen
+  harness trust silently.
+- [ ] Pass a recorded qualification for any Claude Code cell. Attempted
+  2026-11-09 on the laptop (Claude Code 2.1.319, same model and
+  engine, headless): harness and Messages route worked, all four
+  tasks failed on exact output (permission-denied reads, assumed
+  200k context window) in about 6.5 minutes. Evidence
+  `evidence:qualification:99c582603e7785f0ce7acee1fab1eb27969be67ea659fcbf47ecdfeb09b50771`
+  (staging copy only). No cell changes status.
 - [ ] Complete Muse adapter contract version 1 as an explicit reviewed
   contract. Laptop trials on 2026-11-09 proved discovery, headless
   events, both local gates, plugin lifecycle, and offline export, and
@@ -604,29 +621,35 @@ Target: before 2026-12-10.
   `9f562920-19fb-466c-9403-588a451a049a`, Accepted), GitHub release
   `v0.3.1`, Homebrew tap updated, and a local upgrade from 0.3.0 with
   `brew test` passing.
-- [ ] Add versioned loading for trusted project policy, personal defaults,
-  operator defaults, never-cloud state, and cloud intent. Route traces
-  need to name each loaded source without copying secrets.
+- [x] Add versioned loading for trusted project policy, personal defaults,
+  operator defaults, never-cloud state, and cloud intent. Done on
+  `main`. `je why` names each loaded source with applied and ignored
+  fields and copies no secrets.
 - [x] Run Muse local-contract trials separately for interactive and
   headless modes. Done on the laptop on 2026-11-09. Claims are recorded
   only at the level proven in
   [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md). Glimmer tool
   behavior, MCP, resume, and cancellation need Studio trials.
-- [ ] Attempt harness qualification on routes honestly available from the
-  laptop. A failed local-model result stays failed or planned. The point
-  is early blocker discovery, not a forced pass.
+- [x] Attempt harness qualification on routes honestly available from the
+  laptop. Done 2026-11-09 in isolated temp state against local Ollama.
+  Codex failed at its trusted-directory gate. Claude ran and failed
+  exact output on all four tasks. Both results stay failed, both cells
+  stay `planned`, and no assignment was marked qualified.
 - [x] Add read-only `je models` inspection as the stable user surface for
   engines, artifacts, assignments, storage, and qualification status.
   Done on `main`. Release pending.
 - [x] Prototype the Apple Foundation Models helper in evaluation-only mode,
   or record an explicit decision that changes its December status. Done
   on `main`. Titling passed live. Advisory and memory tasks remain.
-- [ ] Design the broker registry, memory sync contract, history redaction
+- [x] Design the broker registry, memory sync contract, history redaction
   and erasure proof, and companion status interfaces before host work
-  hardens around ad hoc shapes.
-- [ ] Complete Q22 groundwork that does not expose a service. That work
-  includes Google project and OAuth planning, DNS and TLS ownership,
-  allowlist and revocation design, audit design, and disable switches.
+  hardens around ad hoc shapes. Drafted in
+  [GATE_B_DESIGNS.md](GATE_B_DESIGNS.md) for Eric to review. Nothing is
+  built from them yet.
+- [ ] Complete Q22 groundwork that does not expose a service. The plan
+  is drafted in [GATE_B_DESIGNS.md](GATE_B_DESIGNS.md) section 5. The
+  Google project creation itself is Eric's account action and has not
+  run. No service is exposed.
 
 ### Gate C. Studio arrival and qualification
 
