@@ -1,10 +1,9 @@
 # Native core implementation
 
-This document records the native implementation through the 0.3.0 release,
-which replaces the Python client in the Homebrew tap, plus the Q20
-credential migration prepared on `main` for the 0.3.1 patch. The 0.3.1
-release itself is still pending. This document is not a claim that the
-launch platform is complete.
+This document records the native implementation through the 0.3.1 release.
+Version 0.3.0 replaced the Python client in the Homebrew tap. Version
+0.3.1 adds the Q20 credential migration. This document is not a claim
+that the launch platform is complete.
 
 ## Settled implementation choices
 

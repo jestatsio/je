@@ -6,7 +6,7 @@ Status owner: Eric Hare.
 
 Decision under audit: Q26 in [ROADMAP.md](ROADMAP.md).
 
-Shipped user client: `je` 0.3.0.
+Shipped user client: `je` 0.3.1.
 
 ## Verdict
 
@@ -433,7 +433,7 @@ Status: **Partial**, with the macOS user-artifact foundation shipped.
   [`CredentialMigration.swift`](Sources/JECore/CredentialMigration.swift)
   with tests in
   [`CredentialMigrationTests.swift`](Tests/JECoreTests/CredentialMigrationTests.swift).
-  The 0.3.1 release that ships it is still pending.
+  Shipped in 0.3.1 on 2026-11-09.
 - [x] Warn during migration that older backups and exports may still hold
   embedded secrets. Every migration report carries the warning.
 - [ ] Prove rotation by verifying a replacement before switching the
@@ -594,12 +594,12 @@ Target: before new Studio qualification results are read.
 
 Target: before 2026-12-10.
 
-- [ ] Ship the implemented Q20 credential migration with the help-text
-  correction already on `main` as the 0.3.1 patch release. Migration,
-  the corrected help text, refreshed status notes, and the 0.3.1 version
-  bump are in the tree. The signed and notarized release and Homebrew
-  tap update are still pending. The public installed 0.3.0 binary still
-  prints the old experimental help lines.
+- [x] Ship the implemented Q20 credential migration with the help-text
+  correction already on `main` as the 0.3.1 patch release. Shipped
+  2026-11-09: Developer ID signed and notarized (submission
+  `9f562920-19fb-466c-9403-588a451a049a`, Accepted), GitHub release
+  `v0.3.1`, Homebrew tap updated, and a local upgrade from 0.3.0 with
+  `brew test` passing.
 - [ ] Add versioned loading for trusted project policy, personal defaults,
   operator defaults, never-cloud state, and cloud intent. Route traces
   need to name each loaded source without copying secrets.
