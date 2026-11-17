@@ -25,8 +25,10 @@ The first published matrix has 112 cells: 1 `qualified`, 87 `planned`,
 and 24 `unsupported`. The unsupported cells are Muse on non-MLX engines,
 declared ahead of qualification on 2026-11-09 trial evidence in
 [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md). Muse on MLX native
-(the gated Glimmer route) stays `planned` in both modes. As of 0.3.1 one
-cell is `qualified`:
+(the gated Glimmer route) stays `planned` in both modes. As of 0.3.2 one
+cell is `qualified`, unchanged from 0.3.1. The live matrix was
+re-verified on 2026-11-16 at 1 `qualified`, 87 `planned`, and 24
+`unsupported`. The qualified cell is:
 `fast/ollama/built_in/single_step/personal_machine`, on qualification
 evidence recorded 2026-11-09. See [IMPLEMENTATION.md](IMPLEMENTATION.md).
 

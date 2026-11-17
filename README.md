@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://jestatsio.github.io/je/">Documentation</a> ·
   <a href="https://github.com/jestatsio/je/releases">Releases</a> ·
-  <a href="ROADMAP.md">Roadmap and open decisions</a> ·
+  <a href="ROADMAP.md">Roadmap and settled decisions</a> ·
   <a href="https://github.com/jestatsio/je/issues">Issues</a>
 </p>
 
@@ -77,7 +77,7 @@ Codex uses the same shape with its own tested route and reviewed model catalog. 
 | `je export` | Writes desktop and editor setup files for review, without applying them. |
 | `je workspace` (Studio host installation only) | Operates host-owned Coder and Lima workspaces. It is not part of the standalone user build above. |
 
-Run `je --help`, or add `--help` to any command, for the options in your build. The roadmap settles this split for the next stage. Trusted users install only the user `je`. The operator host build stays on the Studio.
+Run `je --help` for the full command list in your build. The standalone client has no per-command `--help`; an unknown or malformed command prints a short invalid-arguments message and changes nothing. The roadmap settles this split for the next stage. Trusted users install only the user `je`. The operator host build stays on the Studio.
 
 ## How a session flows
 
@@ -120,6 +120,8 @@ The direction was decided one question at a time. [ROADMAP.md](ROADMAP.md) holds
 | [COMPLETENESS_CHECKLIST.md](COMPLETENESS_CHECKLIST.md) | The December launch completeness audit, gaps, and critical path. |
 | [GATE_A_DECISIONS.md](GATE_A_DECISIONS.md) | Settled measurement rules for December qualification. |
 | [MUSE_CONTRACT_TRIALS.md](MUSE_CONTRACT_TRIALS.md) | Bounded Muse contract trials and the unsupported declaration they support. |
+| [PI_DISCOVERY.md](PI_DISCOVERY.md) · [OPENCODE_DISCOVERY.md](OPENCODE_DISCOVERY.md) | Discovery probes for two harnesses outside the launch set, recorded 2026-11-13. |
+| [PI_TRIAL.md](PI_TRIAL.md) | The bounded Pi qualification trial for one exact assignment. It adds nothing to the launch set. |
 | [GATE_B_DESIGNS.md](GATE_B_DESIGNS.md) | Draft designs for the broker, memory sync, history erasure, companion, and remote access. |
 | [ROADMAP.md](ROADMAP.md) | The Final product direction and settled decisions. |
 | [Releases](https://github.com/jestatsio/je/releases) | Downloadable user client builds with SHA-256 checksums and build manifests. |
