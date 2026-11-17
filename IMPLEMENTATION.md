@@ -48,7 +48,11 @@ the launch platform is complete.
   verification, displayed plans, `--yes` or interactive confirmation,
   `--dry-run` inspection, post-change verification, and `--remove` while
   keeping the marketplace registered. With setup ported, every Python user
-  command has a native counterpart.
+  command has a native counterpart. That parity statement covers the
+  Python 0.2.0 oracle surface. The private Python client gained
+  `models list` and `models status`, `task`, `runs`, and `compare`
+  commands on 2026-11-16; those have no native counterpart in 0.3.2, and
+  the native `je models` above is a different local inventory command.
 - Gateway, memory, and native Ollama profile list and show parity. Native
   writes keep credentials in platform secret storage. Gateway profiles use
   schema 3, including catalog-bound writes. Memory and Ollama profiles use

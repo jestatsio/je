@@ -1,6 +1,6 @@
 # December launch completeness checklist
 
-Snapshot date: 2026-11-09.
+Snapshot date: 2026-11-16.
 
 Status owner: Eric Hare.
 
@@ -43,12 +43,21 @@ recorded qualification evidence support a different status.
 The audit compares the settled answers in [ROADMAP.md](ROADMAP.md) with
 [IMPLEMENTATION.md](IMPLEMENTATION.md), [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md),
 the Swift sources under [Sources/](Sources/), the tests under
-[Tests/](Tests/), the public release state, and the installed 0.3.1 client.
+[Tests/](Tests/), the public release state, and the installed 0.3.2 client.
 
 Public-tree evidence can prove the user artifact. It cannot prove the
 private operator host build, hosted memory or history services, Google and
 network onboarding, workspace operations, or service-side enforcement.
 Items in those areas name the evidence still needed instead of guessing.
+
+The 2026-11-16 refresh adds cross-repository evidence recorded outside
+this tree on 2026-11-13 and 2026-11-16: the Pi and OpenCode harness
+probes and the Pi bounded trial in this repository, the laptop pilot
+activation recorded in the private jestudio repository, and the route
+inventory, task preset, run history, and comparison commands merged
+into the private Python client on 2026-11-16. Those Python commands
+are not in the native 0.3.2 client, and no row below claims that
+parity. Rows change only where the new evidence supports the change.
 
 ### Status meanings
 
@@ -64,7 +73,7 @@ Status measures the full settled requirement. A strong shipped slice can
 still be Partial when other people, places, modes, or qualification cells
 remain outside its evidence.
 
-## Scoreboard at 2026-11-09
+## Scoreboard at 2026-11-16
 
 | Measure | Current state |
 | --- | --- |
@@ -261,6 +270,20 @@ Status: **Partial**.
   200k context window) in about 6.5 minutes. Evidence
   `evidence:qualification:99c582603e7785f0ce7acee1fab1eb27969be67ea659fcbf47ecdfeb09b50771`
   (staging copy only). No cell changes status.
+
+Two harness probes outside the launch set were recorded on 2026-11-13
+and change no box or cell above. Pi and OpenCode were probed through
+the Q13 adapter contract as discovery evidence
+([PI_DISCOVERY.md](PI_DISCOVERY.md),
+[OPENCODE_DISCOVERY.md](OPENCODE_DISCOVERY.md)). A bounded Pi trial
+then passed for one exact assignment: Pi 1.5.2, RPC mode, Docker
+boundary, `studio-harness-qwen35:4b` over Ollama 0.40.16, with the
+tabulate fix unaided and 292 passed on independent verification
+([PI_TRIAL.md](PI_TRIAL.md)). Pi has no native approvals; safety came
+from the outer Docker boundary. Under Q13 the launch set stays Codex,
+Claude Code, and Muse, so the Pi result enters no matrix cell, and
+the open Codex and Claude Code boxes above stay open: the Pi pass
+does not transfer.
 - [ ] Complete Muse adapter contract version 1 as an explicit reviewed
   contract. Laptop trials on 2026-11-09 proved discovery, headless
   events, both local gates, plugin lifecycle, and offline export, and
@@ -525,6 +548,17 @@ foundations in place.
 - [ ] Run onboarding for a second person from clean state and record the
   result. A single-operator success does not close Q2.
 
+Private-side evidence recorded 2026-11-13 in the jestudio repository
+(`docs/studio-next-session.md`) and re-verified against host state on
+2026-11-16: the laptop pilot allowlist approves three test identities
+and two workspaces were created and verified, including one for a
+second test identity. That is laptop pilot evidence under test
+identities. It is not second-person onboarding, and it does not prove
+the server-side authorization rows above, so no box in this section
+changes. The same verification found native Coder down and both pilot
+VM disks missing, so the pilot needs operator restoration before any
+further hosted-workspace evidence can be collected.
+
 ## Q-by-Q status index
 
 | Question | Settled subject | Status | One-line audit result |
@@ -533,9 +567,9 @@ foundations in place.
 | Q2 | First user | Partial | Person separation exists in local models, while onboarding and service enforcement remain unverified. |
 | Q3 | One binary or two | Partial | The user artifact and boundary ship, while the private host build is unverified here. |
 | Q4 | Command grammar | Done | Explicit `je ask` is the only prompt invocation and older verbs keep their meanings. |
-| Q5 | Who chooses the route | Partial | Deterministic policy ships, while project, personal, and operator signal loading does not. |
+| Q5 | Who chooses the route | Partial | Deterministic policy ships, including trusted project, personal, and operator policy loading (Gate B). Built-in eligibility as a personal default, live candidate availability, and the stronger ownership model remain open. |
 | Q6 | Escalation to cloud | Partial | Initial explicit cloud selection has schema support, while post-launch ask-first escalation is missing. |
-| Q7 | Routing signals | Partial | The closed policy types ship, while trusted config sources for most soft layers do not. |
+| Q7 | Routing signals | Partial | The closed starter signal set ships with trusted config sources for the soft layers. Live availability is still saved metadata, and cost, latency, and load stay display-only until ledger evidence qualifies them as decision inputs. |
 | Q8 | Model roles | Partial | Fast and strong are modeled, while strong has no qualified assignment and role cloud targets are not configured as policy. |
 | Q9 | Inference engines | Partial | Four families are named, while only Ollama has a shipped general route and qualification. |
 | Q10 | Model and engine lifecycle | Partial | Read-only `je models` inspection exists. Previewed lifecycle actions do not. |
@@ -548,7 +582,7 @@ foundations in place.
 | Q17 | Where memory lives | Partial | Memory connection and read-only search ship, while cache, outbox, and sync do not. |
 | Q18 | Automatic saving | Missing | No proposals-only enforcement, acceptance flow, evaluation, or opt-in state exists in the user core. |
 | Q19 | History across harnesses | Missing | No hard-split detailed history store, redaction, search, retention, or erasure proof exists. |
-| Q20 | Credential storage | Partial | Native secret references ship on macOS, while settled migration and host-domain proof remain open. |
+| Q20 | Credential storage | Partial | Native secret references and one-profile-at-a-time migration ship on macOS (migration in 0.3.1). Rotation proof, the Linux path, and the operator host-domain proof remain open. |
 | Q21 | Usage ledger | Partial | Ask traces and aggregate math ship, while placement, breadth, retention, sync, and browsing remain open. |
 | Q22 | Remote access | Private or unverified | The public tree contains no Tailscale qualification, Google onboarding, DNS, TLS, or public-surface evidence. |
 | Q23 | Language and packaging | Partial | The signed native user artifact ships, while the separate host build remains private and unverified here. |
@@ -733,10 +767,16 @@ Target: 2026-12-31.
 - Usage traces and aggregates: [`UsageLedger`](Sources/JECore/UsageLedger.swift).
 - Artifact boundary: [`ArtifactBoundary`](Sources/JECore/ArtifactBoundary.swift).
 - Release path: [`release-macos.sh`](scripts/release-macos.sh).
-- Local checks at audit time: `swift test` passed 224 tests with 0 failures
-  on the current tree during the 0.3.0 documentation pass. The installed
-  client rendered the matrix counts used above. Host and hosted service
-  checks were not run because those systems are outside this repository.
+- Harness probes outside the launch set: [PI_DISCOVERY.md](PI_DISCOVERY.md),
+  [PI_TRIAL.md](PI_TRIAL.md), and
+  [OPENCODE_DISCOVERY.md](OPENCODE_DISCOVERY.md), all recorded 2026-11-13.
+- Local checks at audit time: `swift test` passed 256 tests with 0 failures
+  on the current tree on 2026-11-16 (Swift 6.4.2). The installed 0.3.2
+  client rendered the matrix counts used above, re-verified live the
+  same day. Host and hosted service checks were not run because those
+  systems are outside this repository; the pilot state note in the
+  trusted-group section rests on the private host verification named
+  there.
 
 ## How to update this checklist
 
