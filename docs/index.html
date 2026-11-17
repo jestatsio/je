@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Connect your familiar AI tools to J&E Studio. Install je, set up native client plugins, and manage personal model and memory connections.">
+  <meta name="description" content="Connect your familiar AI tools to J&E Studio. Install je, set up native client plugins, manage personal model and memory connections, and see exactly which client each command belongs to.">
   <meta name="theme-color" content="#f8f9f5">
   <title>je · Your tools. Your context. Your Studio.</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -15,7 +15,7 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="#overview" aria-label="je documentation home"><span class="brand-mark" aria-hidden="true">je</span><span>Studio <span class="brand-docs">/ Docs</span></span></a>
-      <div class="topbar-actions"><span class="version">v0.3.0</span><a class="source-link" href="https://github.com/jestatsio/je">Downloads &amp; plugins <span aria-hidden="true">↗</span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu <span aria-hidden="true">☰</span></button></div>
+      <div class="topbar-actions"><span class="version">v0.3.2</span><a class="source-link" href="https://github.com/jestatsio/je">Downloads &amp; plugins <span aria-hidden="true">↗</span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Menu <span aria-hidden="true">☰</span></button></div>
     </div>
   </header>
   <div class="layout">
@@ -28,9 +28,12 @@
         <a href="#connect">Save a connection</a>
         <p class="nav-label">Make it yours</p>
         <a href="#sessions">Client sessions</a>
+        <a href="#routes">Routes &amp; models</a>
+        <a href="#tasks">Tasks &amp; comparisons</a>
         <a href="#memory">Shared memory</a>
         <a href="#ollama">Native Ollama</a>
         <p class="nav-label">Reference</p>
+        <a href="#harnesses">Harnesses &amp; evidence</a>
         <a href="#commands">Commands</a>
         <a href="#privacy">Privacy &amp; local files</a>
         <a href="#updates">Updates &amp; removal</a>
@@ -48,6 +51,7 @@
 je setup</code></pre><button class="copy-button" type="button" data-copy="hero-install" aria-label="Copy install and setup commands">Copy</button></div><div class="hero-next"><span>Signed native binary. Nothing else to install for je itself.</span><a href="#install" aria-label="Read the install guide">Install guide <span aria-hidden="true">→</span></a></div></div>
         <div class="feature-strip"><div><span class="feature-symbol" aria-hidden="true">↗</span><strong>Familiar clients</strong><span>Codex, Claude Code, Ollama</span></div><div><span class="feature-symbol" aria-hidden="true">◈</span><strong>Personal context</strong><span>Memory you can inspect</span></div><div><span class="feature-symbol" aria-hidden="true">⌁</span><strong>Explicit connections</strong><span>You choose each session</span></div></div>
         <p class="service-note"><strong>je is the client for J&amp;E Studio.</strong> It saves your connections and helps your existing tools use them. The Studio service is private and operator-managed. Installing the client does not create an account or grant service access.</p>
+        <p class="service-note"><strong>Two clients share the je name.</strong> This page documents the standalone Homebrew client first. A separate Python client lives in the private Studio repository and carries a few commands the standalone client does not have yet. Where a feature belongs to only one of them, this page says so. Start with <a href="#routes">Routes &amp; models</a> for the split in one place.</p>
       </section>
 
       <section class="section" id="install" aria-labelledby="install-title">
@@ -55,14 +59,14 @@ je setup</code></pre><button class="copy-button" type="button" data-copy="hero-i
         <p>je ships as a signed and notarized native binary for Apple silicon Macs. Homebrew installs it with one command. There is no Python to manage and no source checkout to keep.</p>
         <div class="code-block"><pre><code id="install-code">brew install jestatsio/tap/je
 je --version</code></pre><button class="copy-button" type="button" data-copy="install-code" aria-label="Copy installation commands">Copy</button></div>
-        <p>The version command prints <code>je 0.3.0</code>. From there the path to your first session stays short.</p>
+        <p>The version command prints <code>je 0.3.2</code>, the current release. From there the path to your first session stays short.</p>
         <ol class="install-steps">
           <li><span><strong>Set up your tools.</strong> Run <code>je setup</code> to add the Studio plugin to Codex or Claude Code. <a href="#setup">Setup guide</a></span></li>
           <li><span><strong>Save your connection.</strong> Your operator gives you an endpoint, a model name, and a personal key. <a href="#connect">Save a connection</a></span></li>
           <li><span><strong>Open a session.</strong> Start working in the client you already know, inside your project. <a href="#sessions">Client sessions</a></span></li>
         </ol>
         <p>Install Codex, Claude Code, or Ollama separately. je works with the clients you have and installs none of them for you.</p>
-        <div class="callout"><span class="callout-mark" aria-hidden="true">i</span><div><strong>Upgrading from 0.2.0</strong><p>Run <code>brew upgrade jestatsio/tap/je</code>. The native client replaces the Python build in place and your saved profiles still load. New profile writes store keys in macOS Keychain instead of in the profile file. <a href="https://github.com/jestatsio/je/releases">Release notes <span aria-hidden="true">↗</span></a></p></div></div>
+        <div class="callout"><span class="callout-mark" aria-hidden="true">i</span><div><strong>Upgrading from 0.2.0</strong><p>Run <code>brew upgrade jestatsio/tap/je</code>. The native client replaces the Python build in place and your saved profiles still load. New profile writes store keys in macOS Keychain instead of in the profile file, and <code>je profile migrate</code> moves an older embedded key after a no-inference check. <a href="https://github.com/jestatsio/je/releases">Release notes <span aria-hidden="true">↗</span></a></p></div></div>
       </section>
 
       <section class="section" id="setup" aria-labelledby="setup-title">
@@ -75,7 +79,6 @@ je --version</code></pre><button class="copy-button" type="button" data-copy="in
 je setup --client codex
 je setup --dry-run</code></pre><button class="copy-button" type="button" data-copy="setup-options" aria-label="Copy setup options">Copy</button></div><p>Use <code>--yes</code> to accept installation without the confirmation prompts. Use <code>--remove</code> to remove the Studio plugin while keeping its marketplace entry. The <a href="#commands">command reference</a> lists every setup option.</p></div></details>
       </section>
-
       <section class="section" id="connect" aria-labelledby="connect-title">
         <div class="section-heading"><span class="section-number">03</span><h2 id="connect-title">Save your personal connection.</h2></div>
         <p>A profile gives a service endpoint, model, and personal key a name you can use again. Replace the example address and <code>YOUR_MODEL_NAME</code> with the values from your operator.</p>
@@ -105,10 +108,59 @@ je doctor --profile studio</code></pre><button class="copy-button" type="button"
 je connect codex --profile studio-codex</code></pre><button class="copy-button" type="button" data-copy="codex-profile" aria-label="Copy Codex profile and session example">Copy</button></div><p>At launch, je checks the executable version, catalog contents, selected model, and context against the saved binding. Changing the profile's context does not enlarge the server's limit. A generic model route is not a qualified Codex connection.</p></div>
         </div>
         <p>Pass additional supported client arguments after <code>--</code>. If a client cannot be found, use <code>--executable /absolute/path/to/client</code>. Organization-managed settings may restrict custom providers.</p>
-        <p>For one prompt without a full client session, <code>je ask</code> selects a qualified assignment, shows the full route, and runs the prompt only through that route. <code>je why</code> shows the same choice without running anything. Assignments and their qualification evidence are covered in the <a href="#commands">command reference</a>.</p>
+        <p>For one prompt without a full client session, <code>je ask</code> selects a qualified assignment, shows the full route, and runs the prompt only through that route. <code>je why</code> shows the same choice without running anything. Assignments and their qualification evidence are covered in <a href="#routes">Routes &amp; models</a> and the <a href="#commands">command reference</a>.</p>
         <details><summary>Desktop apps, editors, and other clients</summary><div class="details-content"><p>Generate configuration fragments for review with <code>je export</code>. Exporting does not activate or replace an app's settings. Read the generated README and confirm compatibility with the app's installed version.</p><div class="code-block"><pre><code id="export-code">je export --profile studio</code></pre><button class="copy-button" type="button" data-copy="export-code" aria-label="Copy desktop export command">Copy</button></div><p>For another client that reads OpenAI environment variables, use <code>je run --profile studio -- COMMAND</code>. This passes the connection to the child process. It does not translate protocols or attach shared memory.</p></div></details>
       </section>
 
+      <section class="section" id="routes" aria-labelledby="routes-title">
+        <p class="eyebrow">Local first, cloud by choice</p><h2 id="routes-title">Routes and models.</h2>
+        <p>Every route is explicit. You name the profile or assignment for each session, and there is no automatic fallback between local and cloud in either client. When no qualified route survives policy, je stops and says so instead of substituting a different capability.</p>
+        <h3><span class="client-tag">Standalone client</span> Assignments and the models inventory</h3>
+        <p>In the Homebrew client, classification lives on <strong>assignments</strong>: each published assignment carries a provider kind (<code>local</code> or <code>cloud</code>) and a role (<code>fast</code> or <code>strong</code>). <code>je ask</code> resolves one qualified assignment through layered policy and shows the person, profile, harness, model, and place before anything runs. Cloud use there follows the saved policy you configured, shown by <code>je policy show</code>; the route display names it every time.</p>
+        <div class="code-block"><pre><code id="models-code">je models
+je assignments list
+je why --role fast -- "summarize this change"</code></pre><button class="copy-button" type="button" data-copy="models-code" aria-label="Copy standalone models and routing commands">Copy</button></div>
+        <p><code>je models</code> in this client is a read-only local inventory: engines found on your machine, published model artifacts, your assignments and their qualification status, and storage use. It does not contact a gateway, and finding an engine on <code>PATH</code> does not mean it is healthy or qualified. Route metadata never carries a secret; profiles hold a secret reference while the key itself stays in macOS Keychain.</p>
+        <h3><span class="client-tag client-tag-python">Python client</span> Classified profiles and route status</h3>
+        <p>In the Python client from the private Studio repository, classification lives on the <strong>profile</strong> instead: save each connection with <code>--location local</code> or <code>--location cloud</code> and, when you know it, <code>--tier fast</code> or <code>--tier strong</code>.</p>
+        <div class="code-block"><pre><code id="route-code">je profile add studio-fast \
+  --endpoint https://models.example.test \
+  --model YOUR_FAST_MODEL \
+  --location local \
+  --tier fast
+
+je models list
+je models status</code></pre><button class="copy-button" type="button" data-copy="route-code" aria-label="Copy Python route classification commands">Copy</button></div>
+        <p><code>je models list</code> reads only your saved profiles and shows the inventory without contacting any gateway. <code>je models status</code> checks authentication and model availability for every route without generating a response. Neither command establishes task quality, picks a route for you, or enables fallback. Keys are never printed and are rejected from public route metadata. The standalone client above does not have <code>models list</code> or <code>models status</code>; its single <code>je models</code> command is the local inventory just described.</p>
+      </section>
+
+      <section class="section" id="tasks" aria-labelledby="tasks-title">
+        <p class="eyebrow">Reuse a setup, compare honestly</p><h2 id="tasks-title">Task presets and route comparisons.</h2>
+        <p><span class="client-tag client-tag-python">Python client</span> Everything in this section lives in the Python client from the private Studio repository today. The standalone Homebrew client does not have <code>je task</code>, <code>je runs</code>, or <code>je compare</code> yet, and this section does not claim otherwise.</p>
+        <h3>Task presets</h3>
+        <p>A preset saves one repeatable setup: a harness (Codex or Claude Code), a default profile, an optional memory connection, an optional project directory, and optional harness arguments. Preset files are owner-only, and their argument lists may contain prompts, so treat them as private.</p>
+        <div class="code-block"><pre><code id="task-code">je task add coding \
+  --harness codex \
+  --profile studio-fast \
+  --directory /absolute/path/to/project
+
+je task run coding -- exec "Fix the selected regression"
+je task run coding --profile cloud-strong --allow-cloud</code></pre><button class="copy-button" type="button" data-copy="task-code" aria-label="Copy task preset commands">Copy</button></div>
+        <p>Override the route for one run with <code>--profile</code> without rewriting the preset. Any task launch that selects a profile marked <code>cloud</code> also needs <code>--allow-cloud</code>, every time, whether the cloud profile is the preset default or an override. That gate covers task and comparison launches; a direct <code>je connect</code> session opens the profile you name. Native harness approvals stay in control in every case.</p>
+        <h3>Run history, metadata only</h3>
+        <p>Each task run leaves a small local record: the task, harness, profile, model, start and finish times, duration, and process outcome. Records never contain prompts, arguments, working directories, endpoints, transcripts, tool output, or credentials, and usage and cost stay honestly <code>unknown</code> rather than estimated. A harness exit code is a process result, not a quality score.</p>
+        <div class="code-block"><pre><code id="runs-code">je runs list
+je runs show RUN_ID
+je runs remove RUN_ID</code></pre><button class="copy-button" type="button" data-copy="runs-code" aria-label="Copy run history commands">Copy</button></div>
+        <p>Run records have no automatic expiry, so remove them yourself when they stop being useful. Removing a record changes only that local metadata; your client's own history and any provider logs stay untouched.</p>
+        <h3>Route comparisons</h3>
+        <p>A comparison runs the same declared work through several routes you select explicitly, from a local JSON manifest of cases. Each case names a harness, its arguments, and a per-case timeout, and may add a fixture directory and an independent verifier command.</p>
+        <div class="code-block"><pre><code id="compare-code">je compare run suite.json \
+  --profile studio-fast --profile cloud-strong --allow-cloud
+je compare list
+je compare show COMPARISON_ID</code></pre><button class="copy-button" type="button" data-copy="compare-code" aria-label="Copy route comparison commands">Copy</button></div>
+        <p>Every case and route pair gets a fresh private copy of the fixture, and the source fixture is never the working copy. The verifier runs only after the harness succeeds, without the model or memory credentials, and its result is reported separately from harness completion: a case with no verifier is <code>unverified</code>, never a quiet pass. Timeouts bound each harness and verifier process. Comparison records are metadata only, like run records. One comparison run is evidence about those cases on that day, not a general model ranking.</p>
+      </section>
       <section class="section" id="memory" aria-labelledby="memory-title">
         <p class="eyebrow">Context you control</p><h2 id="memory-title">Keep useful knowledge between sessions.</h2>
         <p>Studio memory holds preferences and project facts across connected tools, separately for each person. Use the Studio memory page to inspect saved information, edit it, review earlier versions, or decide what to forget.</p>
@@ -120,7 +172,7 @@ je memory check studio-memory
 je connect claude --profile studio \
   --memory-profile studio-memory</code></pre><button class="copy-button" type="button" data-copy="memory-code" aria-label="Copy optional memory setup example">Copy</button></div>
         <p>The check lists available tools without reading saved memories or requesting inference. Saving a connection does not attach it automatically. Select <code>--memory-profile</code> for each supported session.</p>
-        <div class="callout"><span class="callout-mark" aria-hidden="true">i</span><div><strong>Current memory support</strong><p>Codex attachment currently requires version <code>0.166.0-alpha.5.1</code> and its own tested model profile. Automatic saves remain unreliable in the pilot. Review what is saved rather than assuming every preference was remembered. Native Ollama and desktop exports do not attach memory through this client.</p></div></div>
+        <div class="callout"><span class="callout-mark" aria-hidden="true">i</span><div><strong>Current memory support</strong><p>Saving is proposals-only by design: a model may propose a memory, and you accept it explicitly. Automatic saving stays off by default, because current small models still choose the wrong edit often enough to need your review. Codex attachment uses its own tested model profile and Codex version pairing from your operator. Native Ollama and desktop exports do not attach memory through this client.</p></div></div>
         <p>Deleted memories leave recall immediately and remain in trash for 30 days. Removing a local memory connection does not delete saved memories or revoke the service token.</p>
       </section>
 
@@ -138,10 +190,21 @@ je ollama --profile studio-native</code></pre><button class="copy-button" type="
         <p class="small-note">This integration covers the native CLI. It does not configure the Ollama desktop app or attach shared memory.</p>
       </section>
 
+      <section class="section" id="harnesses" aria-labelledby="harnesses-title">
+        <p class="eyebrow">What the evidence actually says</p><h2 id="harnesses-title">Harnesses and qualification.</h2>
+        <p>The launch harness set is settled: <strong>Codex, Claude Code, and Muse</strong>. A harness earns a route one recorded qualification at a time, for an exact model, engine, protocol, launch mode, and place. A model listing, a doctor check, or success in a different harness never transfers.</p>
+        <p>Today exactly one of the 112 launch-matrix cells is qualified: the narrow built-in single-step path with one small local model on a personal machine. Everything else is honestly <code>planned</code> or, for 24 Muse cells on non-MLX engines, declared <code>unsupported</code> ahead of qualification from trial evidence. Print the matrix yourself any time:</p>
+        <div class="code-block"><pre><code id="matrix-code">je support-matrix
+je status</code></pre><button class="copy-button" type="button" data-copy="matrix-code" aria-label="Copy support matrix commands">Copy</button></div>
+        <h3>Probed, not launched: Pi and OpenCode</h3>
+        <p>Two further harnesses, Pi and OpenCode, were probed through the same adapter contract on November 13, 2026, as discovery evidence only. A bounded Pi trial then passed for one exact assignment: Pi 1.5.2 in RPC mode, inside a Docker boundary, driving one small local model, fixed its test bug unaided, and passed independent verification. That result comes with its limits attached. It is one run, one task, one small model. Pi has no native approval prompts, so safety in that trial came from the outer Docker boundary, not from approval parity with Codex or Claude Code. The trial adds nothing to the launch set above, and this page claims nothing more general from it. The full records are <code>PI_TRIAL.md</code>, <code>PI_DISCOVERY.md</code>, and <code>OPENCODE_DISCOVERY.md</code> in the je repository.</p>
+        <p>The same small model did not qualify for the coding workflow through Codex or Claude Code, and it fills neither the fast nor the strong role. Final model selection waits for the Studio hardware and its own recorded trials.</p>
+      </section>
+
       <section class="section" id="commands" aria-labelledby="commands-title">
         <p class="eyebrow">Keep this nearby</p><h2 id="commands-title">The command reference.</h2>
-        <p>Run <code>je --help</code> or add <code>--help</code> to a command for its complete options.</p>
-        <div class="table-wrap" role="region" aria-label="Setup options" tabindex="0"><table><caption>Setup options</caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
+        <p>Run <code>je --help</code> for the complete command list in your build. The standalone client has no per-command <code>--help</code>; an unknown or malformed command prints a short invalid-arguments message and changes nothing. The Python client answers <code>--help</code> at every level.</p>
+        <div class="table-wrap" role="region" aria-label="Setup options" tabindex="0"><table><caption>Setup options <span class="client-tag">Standalone client</span></caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
           <tr><td><code>je setup</code></td><td>Detect installed clients and confirm each native Studio plugin installation.</td></tr>
           <tr><td><code>je setup --client codex</code><br><code>je setup --client claude</code></td><td>Set up only the selected client.</td></tr>
           <tr><td><code>je setup --dry-run</code></td><td>Preview the intended setup without applying it.</td></tr>
@@ -152,6 +215,7 @@ je ollama --profile studio-native</code></pre><button class="copy-button" type="
           <tr><td><code>je profile add NAME</code></td><td>Save a model endpoint, permitted model, and personal key. Requires <code>--endpoint</code> and <code>--model</code>.</td></tr>
           <tr><td><code>je profile list</code><br><code>je profile show NAME</code></td><td>Inspect saved profiles without displaying their keys.</td></tr>
           <tr><td><code>je profile remove NAME</code></td><td>Remove the local profile. Server access is not revoked.</td></tr>
+          <tr><td><code>je profile migrate NAME</code></td><td>Move an older embedded key to native secret storage after a no-inference check. Memory and Ollama profiles have matching <code>migrate</code> commands.</td></tr>
           <tr><td><code>je doctor --profile NAME</code></td><td>Check authentication and model availability without inference.</td></tr>
           <tr><td><code>je connect claude --profile NAME</code><br><code>je connect codex --profile NAME</code></td><td>Launch a client with the selected connection. Use a tested route for that client.</td></tr>
           <tr><td><code>je memory add NAME --endpoint URL</code></td><td>Save a separate memory connection and privately enter its token.</td></tr>
@@ -161,13 +225,24 @@ je ollama --profile studio-native</code></pre><button class="copy-button" type="
           <tr><td><code>je export --profile NAME</code></td><td>Prepare desktop and editor settings for review.</td></tr>
           <tr><td><code>je run --profile NAME -- COMMAND</code></td><td>Pass OpenAI connection variables to another client process.</td></tr>
         </tbody></table></div>
-        <div class="table-wrap" role="region" aria-label="Local routing commands" tabindex="0"><table><caption>Local routing and health</caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
+        <div class="table-wrap" role="region" aria-label="Local routing commands" tabindex="0"><table><caption>Local routing and health <span class="client-tag">Standalone client</span></caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
           <tr><td><code>je doctor</code></td><td>Show a local health overview. It contacts no service and runs no inference.</td></tr>
           <tr><td><code>je status</code><br><code>je support-matrix</code></td><td>Show the native core version and the launch qualification matrix with the status of every cell.</td></tr>
+          <tr><td><code>je models</code></td><td>Inspect local engines, published artifacts, assignments, storage, and qualification status. Read-only; contacts no gateway.</td></tr>
+          <tr><td><code>je policy show</code></td><td>Show the loaded routing policy sources, including your configured cloud intent. Field names only, never secrets.</td></tr>
           <tr><td><code>je why … -- PROMPT</code></td><td>Explain which qualified route a prompt would take. Nothing runs.</td></tr>
           <tr><td><code>je ask … -- PROMPT</code></td><td>Show the selected route, then run one prompt through it. Only qualified assignments launch.</td></tr>
           <tr><td><code>je assignments list</code><br><code>je assignments add ID …</code><br><code>je assignments qualify ID</code></td><td>Publish personal-machine assignments and record qualification evidence for local routes.</td></tr>
+          <tr><td><code>je triage availability</code><br><code>je triage evaluate-titling</code></td><td>Evaluation-only checks for the on-device foundation model. They hold no routing authority.</td></tr>
+          <tr><td><code>je doctor muse</code><br><code>je contracts</code></td><td>Probe public Muse local-contract signals without inference, and show the frozen interface contract.</td></tr>
           <tr><td><code>je credential --profile NAME</code></td><td>Supply a saved key to a desktop credential helper. Exported bundles use this for you.</td></tr>
+        </tbody></table></div>
+        <div class="table-wrap" role="region" aria-label="Python client commands" tabindex="0"><table><caption>Routes, tasks, and comparisons <span class="client-tag client-tag-python">Python client</span></caption><thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead><tbody>
+          <tr><td><code>je models list</code></td><td>Show saved routes with location, tier, and model. Reads local profiles only.</td></tr>
+          <tr><td><code>je models status</code></td><td>Check authentication and availability for every route without inference.</td></tr>
+          <tr><td><code>je task add NAME …</code><br><code>je task run NAME</code></td><td>Save and launch reusable task presets. Cloud routes also need <code>--allow-cloud</code> on every launch.</td></tr>
+          <tr><td><code>je runs list</code><br><code>je runs show RUN_ID</code><br><code>je runs remove RUN_ID</code></td><td>Inspect or remove metadata-only run history. No transcripts are stored.</td></tr>
+          <tr><td><code>je compare run MANIFEST --profile …</code><br><code>je compare list</code><br><code>je compare show ID</code></td><td>Run the same manifest cases across selected routes with fresh fixture copies and separate verifier results.</td></tr>
         </tbody></table></div>
         <p class="small-note"><code>je doctor --profile NAME --probe</code> sends small model requests and can consume inference resources. Add <code>--harness claude</code> or <code>--harness codex</code> to select protocol checks. A passing probe does not qualify every native client feature.</p>
       </section>
@@ -175,6 +250,8 @@ je ollama --profile studio-native</code></pre><button class="copy-button" type="
       <section class="section" id="privacy" aria-labelledby="privacy-title">
         <p class="eyebrow">Know what is saved</p><h2 id="privacy-title">Personal credentials. Explicit access.</h2>
         <div class="privacy-grid"><article><h3>On your computer</h3><p>Keys and tokens are saved in macOS Keychain through the bundled <code>je-secret-helper</code>. Profile files hold public fields and a secret reference, never the key itself. Profiles saved by 0.2.0 with an embedded key still load under strict private-file checks. Model, memory, and native Ollama profiles are separate.</p></article><article><h3>In your session</h3><p>You choose the profile and whether to attach memory. Native client instructions, hooks, history behavior, and approval controls still apply.</p></article><article><h3>At your Studio</h3><p>Your operator manages service access, logging, and retention. Confirm those policies before sending sensitive material. The public client does not provide a Studio account.</p></article></div>
+        <h3>Usage and run records</h3>
+        <p>The standalone client's <code>je ask</code> keeps a content-free usage trace on your machine: route, harness, role, timing, reported token counts, and outcome, with no prompt or answer text. The Python client's run and comparison records follow the same rule. They hold route, task, timing, and process metadata only, and never contain prompts, raw arguments, working directories, endpoints, fixture or manifest paths, generated artifacts, transcripts, tool or verifier output, or credentials. Task preset files are the one private exception to know about: their argument lists may contain prompts you wrote there, and they stay in owner-only files on your machine.</p>
         <h3>Where profiles live</h3><p>The default directory remains <code>~/.config/je-gateway</code> for compatibility, or <code>je-gateway</code> under <code>XDG_CONFIG_HOME</code>. Existing profiles do not need to move.</p>
         <div class="table-wrap" role="region" aria-label="State directory precedence" tabindex="0"><table><thead><tr><th scope="col">Setting</th><th scope="col">Precedence</th></tr></thead><tbody><tr><td><code>je --state-dir PATH …</code></td><td>An explicit command-level location takes precedence.</td></tr><tr><td><code>JE_STUDIO_HOME</code></td><td>The preferred environment override.</td></tr><tr><td><code>JE_GATEWAY_HOME</code></td><td>The legacy override, used when <code>JE_STUDIO_HOME</code> is unset.</td></tr></tbody></table></div>
         <p>For noninteractive model setup, use <code>--key-file</code> with an owner-only regular file or <code>--key-env</code> naming an already-set environment variable. Memory setup uses <code>--token-file</code> or <code>--token-env</code>. Never put a credential's value directly in a command argument.</p>
@@ -194,9 +271,10 @@ brew uninstall je</code></pre><button class="copy-button" type="button" data-cop
           <details><summary>Setup cannot find Codex or Claude Code</summary><div class="details-content"><p>Install the native client separately and confirm its command works in your terminal. Run <code>je setup --dry-run</code> to inspect detection, then try setup for that client. Setup does not download the client for you.</p></div></details>
           <details><summary>The key is rejected or the model is missing</summary><div class="details-content"><p>Run <code>je doctor --profile NAME</code> and confirm the endpoint and permitted model name with your operator. Inspect the saved values with <code>je profile show NAME</code>. Replace the profile explicitly if its key or connection has changed.</p></div></details>
           <details><summary>Codex reports a version or catalog mismatch</summary><div class="details-content"><p>Match the installed Codex version, model, context limit, and reviewed catalog to the saved profile. Ask the operator to review changed catalog contents before replacing the binding. A successful model listing does not remove this requirement.</p></div></details>
-          <details><summary>Memory is saved but not available in the session</summary><div class="details-content"><p>Run <code>je memory check NAME</code>, then launch a supported client with <code>--memory-profile NAME</code>. Saving a connection or installing the plugin does not attach memory automatically. Verify the supported Codex version when using Codex.</p></div></details>
+          <details><summary>Memory is saved but not available in the session</summary><div class="details-content"><p>Run <code>je memory check NAME</code>, then launch a supported client with <code>--memory-profile NAME</code>. Saving a connection or installing the plugin does not attach memory automatically. Verify the supported Codex pairing when using Codex.</p></div></details>
           <details><summary>Ollama cannot find the expected model</summary><div class="details-content"><p>Check the separate native profile with <code>je ollama --profile NAME check</code>. Use the operator's native model name and full API root. Gateway aliases and gateway credentials do not automatically work with the native service.</p></div></details>
           <details><summary>A desktop export has not changed the app</summary><div class="details-content"><p>That is expected. Exports create files for review, without activating them. Read the generated README and apply only the relevant settings through the app's supported configuration workflow.</p></div></details>
+          <details><summary>A command on this page is missing from your je</summary><div class="details-content"><p>Check the tag beside the section heading. Commands marked <em>Python client</em>, such as <code>je models list</code>, <code>je task</code>, <code>je runs</code>, and <code>je compare</code>, live in the Python client from the private Studio repository and are not in the Homebrew build yet; the standalone client answers them with its short invalid-arguments message. Commands marked <em>Standalone client</em>, such as <code>je ask</code> and <code>je assignments</code>, are the reverse. Run <code>je --help</code> to see exactly what your build offers.</p></div></details>
         </div>
         <p class="support-note">For a connection problem, contact your Studio operator. For a client issue, <a href="https://github.com/jestatsio/je/issues">open an issue</a> with the command, installed versions, and error text. Leave out credentials and private memory contents.</p>
       </section>
@@ -206,3 +284,5 @@ brew uninstall je</code></pre><button class="copy-button" type="button" data-cop
   <div class="sr-only" id="copy-status" role="status" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>
+
+
